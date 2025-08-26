@@ -1,0 +1,26 @@
+{
+  "name": "ghost-drive-be",
+  "version": "1.0.0",
+  "author": "Ghost Drive",
+  "license": "MIT",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "bun run --watch src/index.ts",
+    "dev:prod": "export NODE_ENV=production && bun run --watch src/index.ts",
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.2.0",
+    "@elysiajs/opentelemetry": "^1.2.0",
+    "@elysiajs/swagger": "^1.2.0",
+    "@mikro-orm/core": "^6.4.5",
+    "@mikro-orm/postgresql": "^6.4.5",
+    "elysia": "latest",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.8",
+    "bun-types": "latest"
+  },
+  "module": "src/index.js"
+}
