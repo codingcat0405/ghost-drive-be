@@ -1,5 +1,5 @@
-import {BaseEntity} from "./BaseEntity";
-import {Entity, Property} from "@mikro-orm/core";
+import { BaseEntity } from "./BaseEntity";
+import { Entity, Property } from "@mikro-orm/core";
 
 @Entity()
 export class User extends BaseEntity {
@@ -12,6 +12,21 @@ export class User extends BaseEntity {
 
   @Property()
   password!: string;
+
+  @Property({
+    nullable: true,
+  })
+  avatar!: string;
+
+  @Property({
+    nullable: true,
+  })
+  aesKeyEncrypted!: string;
+
+  @Property({
+    nullable: true,
+  })
+  bucketName!: string;
 
 
   @Property()

@@ -4,9 +4,10 @@ A secure end-to-end encrypted file storage system built with **Elysia** and **Bu
 
 ## 🚀 Features
 
-- **End-to-End Encryption**: Files are encrypted on the client side using AES-256
-- **PIN-Based Security**: User-defined PINs protect encryption keys
-- **Zero-Knowledge Architecture**: Server cannot decrypt user files
+- **True End-to-End Encryption**: Files are encrypted on the client side using AES-256
+- **Client-Side Key Generation**: AES keys generated on frontend, preventing backend backdoors
+- **PIN-Based Security**: User-defined PINs protect encryption keys (PIN never leaves client)
+- **Zero-Knowledge Architecture**: Server cannot decrypt user files even if compromised
 - **MinIO Integration**: Scalable S3-compatible object storage
 - **Modern Stack**: Built with Elysia.js and Bun runtime
 - **RESTful API**: Complete file management endpoints
@@ -20,27 +21,41 @@ Ghost Drive implements a sophisticated encryption system that ensures complete p
 ### Encryption Architecture
 
 1. **PIN-Based Key Derivation**: Users provide a secret PIN (e.g., "123456")
-2. **AES Key Generation**: Backend generates a random AES-256 key for file encryption
-3. **Key Encryption**: The AES key is encrypted using the user's PIN
-4. **Secure Storage**: Only the encrypted AES key is stored in the database
-5. **Client-Side Processing**: All file encryption/decryption happens on the client
+2. **Client-Side AES Key Generation**: Frontend generates a random AES-256 key for file encryption
+3. **Key Encryption**: The AES key is encrypted using the user's PIN on the client side
+4. **Secure Storage**: Only the encrypted AES key is sent to and stored in the database
+5. **Zero-Knowledge**: Backend never sees the plain PIN or plain AES key
+6. **Client-Side Processing**: All file encryption/decryption happens on the client
 
 ### Step-by-Step Process
 
 #### File Upload (Encryption)
 
 ```
-┌─────────────┐    PIN      ┌─────────────┐
-│    User     │ ──────────► │   Backend   │
-│             │             │             │
-└─────────────┘             └─────────────┘
-                                    │
-                                    ▼
-                            ┌─────────────┐
-                            │ Generate    │
-                            │ Random AES  │
-                            │ Key         │
-                            └─────────────┘
+┌─────────────┐
+│    User     │
+│             │
+└─────────────┘
+        │
+        ▼
+┌─────────────┐
+│ Generate    │
+│ Random AES  │
+│ Key         │
+└─────────────┘
+        │
+        ▼
+┌─────────────┐
+│ Encrypt AES │
+│ Key with    │
+│ PIN         │
+└─────────────┘
+        │
+        ▼
+┌─────────────┐    Encrypted    ┌─────────────┐
+│    User     │ ───────────────►│   Backend   │
+│             │    AES Key      │             │
+└─────────────┘                 └─────────────┘
                                     │
                                     ▼
 ┌─────────────┐    Encrypted    ┌─────────────┐
@@ -49,26 +64,6 @@ Ghost Drive implements a sophisticated encryption system that ensures complete p
 └─────────────┘                 └─────────────┘
                                     │
                                     ▼
-                            ┌─────────────┐
-                            │ Send        │
-                            │ Encrypted   │
-                            │ AES Key     │
-                            └─────────────┘
-                                    │
-                                    ▼
-┌─────────────┐    Encrypted    ┌─────────────┐
-│    User     │ ◄────────────── │   Backend   │
-│             │    AES Key      │             │
-└─────────────┘                 └─────────────┘
-        │
-        ▼
-┌─────────────┐
-│ Decrypt AES │
-│ Key with    │
-│ PIN         │
-└─────────────┘
-        │
-        ▼
 ┌─────────────┐
 │ Encrypt     │
 │ File with   │
@@ -85,21 +80,19 @@ Ghost Drive implements a sophisticated encryption system that ensures complete p
 
 **Step-by-step explanation:**
 
-1. **User provides PIN**: User sends their secret PIN to the backend
-2. **Backend generates AES key**: Server creates a random AES-256 encryption key
-3. **Key encryption**: The AES key is encrypted using the user's PIN
-4. **Store encrypted key**: Only the encrypted AES key is saved in the database
-5. **Send to client**: Backend sends the encrypted AES key to the user
-6. **Client decrypts key**: User decrypts the AES key using their PIN
-7. **File encryption**: User encrypts their file with the plain AES key
-8. **Upload encrypted file**: Encrypted file is uploaded to MinIO storage
+1. **User generates AES key**: Frontend creates a random AES-256 encryption key
+2. **Client-side key encryption**: AES key is encrypted using the user's PIN (PIN never leaves client)
+3. **Send encrypted key**: Only the encrypted AES key is sent to the backend
+4. **Store encrypted key**: Backend saves the encrypted AES key in the database
+5. **File encryption**: User encrypts their file with the plain AES key (stored locally)
+6. **Upload encrypted file**: Encrypted file is uploaded to MinIO storage
 
 #### File Download (Decryption)
 
 ```
 ┌─────────────┐    Request     ┌─────────────┐
-│    User     │ ──────────────►    Backend   │ 
-│             │   File + PIN   │             │
+│    User     │ ──────────────►│   Backend   │
+│             │   File ID      │             │
 └─────────────┘                └─────────────┘
                                     │
                                     ▼
@@ -151,10 +144,10 @@ Ghost Drive implements a sophisticated encryption system that ensures complete p
 
 **Step-by-step explanation:**
 
-1. **User requests file**: User asks for a file and provides their PIN
+1. **User requests file**: User asks for a file by ID (no PIN sent to backend)
 2. **Backend retrieves key**: Server gets the encrypted AES key from database
 3. **Send encrypted key**: Backend sends the encrypted AES key to user
-4. **Client decrypts key**: User decrypts the AES key using their PIN
+4. **Client decrypts key**: User decrypts the AES key using their PIN (stored locally)
 5. **Request encrypted file**: User requests the encrypted file from MinIO
 6. **Receive encrypted file**: MinIO sends the encrypted file to user
 7. **File decryption**: User decrypts the file using the plain AES key
@@ -327,6 +320,75 @@ Run with:
 docker-compose up -d
 ```
 
+## 📚 API Documentation
+
+### Authentication
+
+All API endpoints require JWT authentication (except registration/login).
+
+```bash
+# Register a new user
+POST /api/auth/register
+{
+  "username": "user@example.com",
+  "password": "securepassword"
+}
+
+# Login
+POST /api/auth/login
+{
+  "username": "user@example.com",
+  "password": "securepassword"
+}
+
+# Setup encryption (after registration/login)
+POST /api/auth/setup-encryption
+Authorization: Bearer <jwt-token>
+{
+  "encryptedAesKey": "encrypted-aes-key-string"
+}
+```
+
+### File Operations
+
+```bash
+# Upload encrypted file
+POST /api/files/upload
+Authorization: Bearer <jwt-token>
+Content-Type: multipart/form-data
+{
+  "file": <encrypted-file>,
+  "filename": "document.pdf"
+}
+
+# Download file
+GET /api/files/:fileId
+Authorization: Bearer <jwt-token>
+
+# List user files
+GET /api/files
+Authorization: Bearer <jwt-token>
+
+# Delete file
+DELETE /api/files/:fileId
+Authorization: Bearer <jwt-token>
+```
+
+### User Management
+
+```bash
+# Get user profile
+GET /api/users/profile
+Authorization: Bearer <jwt-token>
+
+# Update encryption key
+PUT /api/users/encryption-key
+Authorization: Bearer <jwt-token>
+{
+  "newEncryptedAesKey": "new-encrypted-aes-key-string"
+}
+```
+
 ## 🔧 Development
 
 ### Project Structure
@@ -370,10 +432,13 @@ bun run build
 ## 🔐 Security Considerations
 
 - **PIN Security**: Users should use strong, unique PINs
+- **Client-Side Key Generation**: AES keys are generated on the frontend, preventing backend backdoors
+- **PIN Never Transmitted**: User PINs never leave the client, preventing man-in-the-middle attacks
+- **Zero-Knowledge Architecture**: Backend cannot decrypt files even if compromised
 - **Key Rotation**: Consider implementing key rotation mechanisms
 - **Rate Limiting**: Implement rate limiting for authentication endpoints
 - **HTTPS**: Always use HTTPS in production
-- **Audit Logging**: Log access attempts and file operations
+- **Audit Logging**: Log access attempts and file operations (without sensitive data)
 - **Backup Strategy**: Implement secure backup for encrypted keys
 
 ## 🤝 Contributing

@@ -4,7 +4,7 @@ import {type Opt, PrimaryKey, Property} from "@mikro-orm/core";
 export abstract class BaseEntity {
 
   @PrimaryKey()
-  id!: bigint;
+  id!: number;
 
   @Property()
   createdAt: Date & Opt = new Date();
