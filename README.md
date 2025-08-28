@@ -200,12 +200,10 @@ MINIO_ENDPOINT=localhost
 MINIO_PORT=9000
 MINIO_ACCESS_KEY=your-access-key
 MINIO_SECRET_KEY=your-secret-key
-MINIO_BUCKET=ghost-drive-files
 MINIO_USE_SSL=false
 
 # Server Configuration
 PORT=3000
-NODE_ENV=development
 ```
 
 ### 4. Database Setup

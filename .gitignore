@@ -43,3 +43,4 @@ package-lock.json
 bun.lockb
 .idea
 .env
+src/draft.ts

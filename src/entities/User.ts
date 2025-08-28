@@ -16,12 +16,12 @@ export class User extends BaseEntity {
   @Property({
     nullable: true,
   })
-  avatar!: string;
+  avatar?: string;
 
   @Property({
     nullable: true,
   })
-  aesKeyEncrypted!: string;
+  aesKeyEncrypted?: string;
 
   @Property({
     nullable: true,

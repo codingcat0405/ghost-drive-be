@@ -7,8 +7,6 @@ import userController from "./controllers/user.controller";
 import {swagger} from '@elysiajs/swagger'
 import {cors} from '@elysiajs/cors'
 import {opentelemetry} from '@elysiajs/opentelemetry'
-import {BatchSpanProcessor} from '@opentelemetry/sdk-trace-node'
-import {OTLPTraceExporter} from '@opentelemetry/exporter-trace-otlp-proto'
 
 const startApp = async () => {
   try {
@@ -51,7 +49,7 @@ const startApp = async () => {
       .group("/api", group =>
         group.use(userController)
       )
-      .listen(3000);
+      .listen(process.env.PORT || 3000);
 
     console.log(
       `🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`

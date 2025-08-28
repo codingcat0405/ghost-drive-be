@@ -1,13 +1,13 @@
-import {Elysia, t} from "elysia";
-import userService from "../services/UserService";
+import { Elysia, t } from "elysia";
 import authMacro from "../macros/auth";
+import UserService from "../services/UserService";
 
+const userService = new UserService();
 const userController = new Elysia()
   .group("/users", group =>
     group
-      .use(userService)
       .use(authMacro)
-      .post("/register", async ({body, userService}) => {
+      .post("/register", async ({ body }) => {
         return await userService.register(body.username, body.password)
       }, {
         detail: {
@@ -18,7 +18,7 @@ const userController = new Elysia()
           password: t.String(),
         })
       })
-      .post("/login", async ({body, userService}) => {
+      .post("/login", async ({ body }) => {
         return await userService.login(body.username, body.password)
       }, {
         detail: {
@@ -29,28 +29,69 @@ const userController = new Elysia()
           password: t.String(),
         })
       })
-      .get("/me", async ({user}) => {
-        return user
+      .get("/me", async ({ user }) => {
+        return await userService.getUserDetail(user)
       }, {
         checkAuth: ['user'],
         detail: {
           tags: ["User"],
           security: [
-            {JwtAuth: []}
+            { JwtAuth: [] }
           ],
         },
       })
-      // .use(authMacro)
-      .get("/admin", async ({user}) => {
-        return user
+      .post("/upload-aes-key-encrypted", async ({ user, body }) => {
+        return await userService.uploadAESKeyEncrypted(user, body.aesKeyEncrypted)
       }, {
-        checkAuth: ['admin'],
+        checkAuth: ['user'],
         detail: {
           tags: ["User"],
           security: [
-            {JwtAuth: []}
+            { JwtAuth: [] }
           ],
         },
+        body: t.Object({
+          aesKeyEncrypted: t.String(),
+        })
+      })
+      .get("/get-aes-key-encrypted", async ({ user }) => {
+        return await userService.getAESKeyEncrypted(user)
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["User"],
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+      })
+      .post("/update-aes-key-encrypted", async ({ user, body }) => {
+        return await userService.updateAESKeyEncrypted(user, body.aesKeyEncrypted)
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["User"],
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+        body: t.Object({
+          aesKeyEncrypted: t.String(),
+        })
+      })
+      .post("/update-avatar", async ({ user, body }) => {
+        return await userService.updateAvatar(user, body.avatar)
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["User"],
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+        body: t.Object({
+          avatar: t.String(),
+        })
       })
 
   )
