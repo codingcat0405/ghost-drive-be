@@ -8,11 +8,104 @@ A secure end-to-end encrypted file storage system built with **Elysia** and **Bu
 - **Client-Side Key Generation**: AES keys generated on frontend, preventing backend backdoors
 - **PIN-Based Security**: User-defined PINs protect encryption keys (PIN never leaves client)
 - **Zero-Knowledge Architecture**: Server cannot decrypt user files even if compromised
+- **Per-User Bucket Isolation**: Each user gets their own dedicated MinIO bucket for complete data isolation
+- **Virtual Folder Organization**: Files are organized via path field in frontend while maintaining flat storage structure
 - **MinIO Integration**: Scalable S3-compatible object storage
 - **Modern Stack**: Built with Elysia.js and Bun runtime
 - **RESTful API**: Complete file management endpoints
 - **JWT Authentication**: Secure user authentication
 - **Swagger Documentation**: Interactive API documentation
+
+## 📁 File System Architecture
+
+Ghost Drive implements a unique file system architecture that provides both security and flexibility:
+
+### Per-User Bucket Isolation
+
+When a user registers, the system automatically creates a dedicated MinIO bucket for that user:
+
+```
+User Registration Flow:
+┌─────────────┐
+│    User     │
+│  Registers  │
+└─────────────┘
+        │
+        ▼
+┌─────────────┐
+│   Backend   │
+│ Creates     │
+│ Bucket:     │
+│ ghostdrive- │
+│ {username}  │
+└─────────────┘
+        │
+        ▼
+┌─────────────┐
+│   MinIO     │
+│ Storage     │
+│             │
+│ ghostdrive- │
+│ user1/      │
+│ ghostdrive- │
+│ user2/      │
+│ ghostdrive- │
+│ user3/      │
+└─────────────┘
+```
+
+### Virtual Folder Organization
+
+Files are stored in a flat structure within each user's bucket, but users can organize them using virtual folders through the `path` field:
+
+**Storage Reality (MinIO Bucket):**
+
+```
+ghostdrive-user1/
+├── file1.txt
+├── file2.pdf
+├── file3.jpg
+└── file4.docx
+```
+
+**User Experience (Frontend Organization):**
+
+```
+📁 Documents/
+├── 📄 file1.txt
+└── 📄 file2.pdf
+
+📁 Photos/
+├── 🖼️ file3.jpg
+
+📁 Work/
+└── 📄 file4.docx
+```
+
+### File Entity Structure
+
+The `File` entity contains all necessary information for file management:
+
+```typescript
+{
+  id: number,           // Unique file identifier
+  name: string,         // Original filename
+  objectKey: string,    // MinIO object key (filename in bucket)
+  path: string,         // Virtual path for frontend organization (e.g., "/Documents/Work/")
+  size: number,         // File size in bytes
+  mimeType: string,     // File MIME type
+  userId: number        // Owner user ID
+}
+```
+
+### Benefits of This Architecture
+
+1. **Complete Data Isolation**: Each user's files are stored in separate buckets
+2. **Simplified Storage**: No complex folder hierarchies in MinIO
+3. **Flexible Organization**: Users can create unlimited virtual folders
+4. **Easy Migration**: Simple to move files between virtual folders
+5. **Scalable**: Flat storage structure scales better than nested folders
+6. **Security**: Bucket-level access control prevents cross-user data access
 
 ## 🔒 How Encryption Works
 
@@ -85,7 +178,7 @@ Ghost Drive implements a sophisticated encryption system that ensures complete p
 3. **Send encrypted key**: Only the encrypted AES key is sent to the backend
 4. **Store encrypted key**: Backend saves the encrypted AES key in the database
 5. **File encryption**: User encrypts their file with the plain AES key (stored locally)
-6. **Upload encrypted file**: Encrypted file is uploaded to MinIO storage
+6. **Upload encrypted file**: Encrypted file is uploaded to user's dedicated MinIO bucket
 
 #### File Download (Decryption)
 
@@ -148,7 +241,7 @@ Ghost Drive implements a sophisticated encryption system that ensures complete p
 2. **Backend retrieves key**: Server gets the encrypted AES key from database
 3. **Send encrypted key**: Backend sends the encrypted AES key to user
 4. **Client decrypts key**: User decrypts the AES key using their PIN (stored locally)
-5. **Request encrypted file**: User requests the encrypted file from MinIO
+5. **Request encrypted file**: User requests the encrypted file from their MinIO bucket
 6. **Receive encrypted file**: MinIO sends the encrypted file to user
 7. **File decryption**: User decrypts the file using the plain AES key
 8. **Original file restored**: User now has access to the original file
@@ -241,9 +334,9 @@ bun start
 
 The application will be available at:
 
-- **API**: http://localhost:3000
-- **Swagger Documentation**: http://localhost:3000/swagger-ui
-- **MinIO Console**: http://localhost:9001
+- **API**: <http://localhost:3000>
+- **Swagger Documentation**: <http://localhost:3000/swagger-ui>
+- **MinIO Console**: <http://localhost:9001>
 
 ## 🐳 Docker Deployment
 
@@ -326,65 +419,129 @@ All API endpoints require JWT authentication (except registration/login).
 
 ```bash
 # Register a new user
-POST /api/auth/register
+POST /api/users/register
 {
   "username": "user@example.com",
   "password": "securepassword"
 }
 
 # Login
-POST /api/auth/login
+POST /api/users/login
 {
   "username": "user@example.com",
   "password": "securepassword"
 }
-
-# Setup encryption (after registration/login)
-POST /api/auth/setup-encryption
-Authorization: Bearer <jwt-token>
-{
-  "encryptedAesKey": "encrypted-aes-key-string"
-}
-```
-
-### File Operations
-
-```bash
-# Upload encrypted file
-POST /api/files/upload
-Authorization: Bearer <jwt-token>
-Content-Type: multipart/form-data
-{
-  "file": <encrypted-file>,
-  "filename": "document.pdf"
-}
-
-# Download file
-GET /api/files/:fileId
-Authorization: Bearer <jwt-token>
-
-# List user files
-GET /api/files
-Authorization: Bearer <jwt-token>
-
-# Delete file
-DELETE /api/files/:fileId
-Authorization: Bearer <jwt-token>
 ```
 
 ### User Management
 
 ```bash
 # Get user profile
-GET /api/users/profile
+GET /api/users/me
 Authorization: Bearer <jwt-token>
 
-# Update encryption key
-PUT /api/users/encryption-key
+# Upload encrypted AES key (setup encryption)
+POST /api/users/upload-aes-key-encrypted
 Authorization: Bearer <jwt-token>
 {
-  "newEncryptedAesKey": "new-encrypted-aes-key-string"
+  "aesKeyEncrypted": "encrypted-aes-key-string"
 }
+
+# Get encrypted AES key
+GET /api/users/get-aes-key-encrypted
+Authorization: Bearer <jwt-token>
+
+# Update encrypted AES key
+POST /api/users/update-aes-key-encrypted
+Authorization: Bearer <jwt-token>
+{
+  "aesKeyEncrypted": "new-encrypted-aes-key-string"
+}
+
+# Update user avatar
+POST /api/users/update-avatar
+Authorization: Bearer <jwt-token>
+{
+  "avatar": "base64-encoded-avatar-image"
+}
+```
+
+### File Operations
+
+**Note**: File operations are currently implemented through MinIO presigned URLs for enhanced security. The frontend should:
+
+1. Get presigned URLs from the backend
+2. Upload/download files directly to/from MinIO
+3. Store file metadata in the database
+
+```bash
+# Get upload presigned URL
+GET /api/files/upload-url
+Authorization: Bearer <jwt-token>
+Query Parameters:
+- filename: string (required)
+- path: string (optional, default: "/")
+
+# Get download presigned URL
+GET /api/files/download-url/:fileId
+Authorization: Bearer <jwt-token>
+
+# List user files
+GET /api/files
+Authorization: Bearer <jwt-token>
+Query Parameters:
+- path: string (optional, filter by virtual path)
+
+# Delete file
+DELETE /api/files/:fileId
+Authorization: Bearer <jwt-token>
+```
+
+### File Upload Process
+
+1. **Get Upload URL**: Request a presigned URL from the backend
+2. **Upload to MinIO**: Use the presigned URL to upload the encrypted file directly to MinIO
+3. **Store Metadata**: Send file metadata to the backend to store in the database
+
+```javascript
+// Example upload flow
+const uploadUrl = await fetch('/api/files/upload-url?filename=document.pdf&path=/Documents/', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+await fetch(uploadUrl, {
+  method: 'PUT',
+  body: encryptedFile
+});
+
+// Store file metadata
+await fetch('/api/files/metadata', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${token}` },
+  body: JSON.stringify({
+    name: 'document.pdf',
+    objectKey: 'document.pdf',
+    path: '/Documents/',
+    size: encryptedFile.size,
+    mimeType: 'application/pdf'
+  })
+});
+```
+
+### File Download Process
+
+1. **Get Download URL**: Request a presigned URL for the file
+2. **Download from MinIO**: Use the presigned URL to download the encrypted file directly from MinIO
+3. **Decrypt Locally**: Decrypt the file using the user's AES key and PIN
+
+```javascript
+// Example download flow
+const downloadUrl = await fetch('/api/files/download-url/123', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+const encryptedFile = await fetch(downloadUrl);
+// Decrypt file using user's AES key and PIN
 ```
 
 ## 🔧 Development
@@ -394,13 +551,21 @@ Authorization: Bearer <jwt-token>
 ```
 src/
 ├── controllers/     # API route handlers
-├── crypto/         # Encryption utilities
-├── entities/       # Database models
-├── macros/         # Elysia macros (auth, etc.)
-├── middlewares/    # Request/response middleware
-├── services/       # Business logic
-├── db.ts          # Database configuration
-├── index.ts       # Application entry point
+│   └── user.controller.ts
+├── entities/        # Database models
+│   ├── BaseEntity.ts
+│   ├── File.ts
+│   └── User.ts
+├── macros/          # Elysia macros (auth, etc.)
+│   └── auth.ts
+├── middlewares/     # Request/response middleware
+│   ├── errorMiddleware.ts
+│   └── responseMiddleware.ts
+├── services/        # Business logic
+│   ├── MinioService.ts
+│   └── UserService.ts
+├── db.ts           # Database configuration
+├── index.ts        # Application entry point
 └── mikro-orm.config.ts
 ```
 
@@ -433,6 +598,8 @@ bun run build
 - **Client-Side Key Generation**: AES keys are generated on the frontend, preventing backend backdoors
 - **PIN Never Transmitted**: User PINs never leave the client, preventing man-in-the-middle attacks
 - **Zero-Knowledge Architecture**: Backend cannot decrypt files even if compromised
+- **Bucket Isolation**: Each user's files are stored in separate buckets for complete isolation
+- **Presigned URLs**: File uploads/downloads use presigned URLs for enhanced security
 - **Key Rotation**: Consider implementing key rotation mechanisms
 - **Rate Limiting**: Implement rate limiting for authentication endpoints
 - **HTTPS**: Always use HTTPS in production
