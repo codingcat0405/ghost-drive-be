@@ -4,6 +4,7 @@ import {RequestContext} from "@mikro-orm/core";
 import responseMiddleware from "./middlewares/responseMiddleware";
 import errorMiddleware from "./middlewares/errorMiddleware";
 import userController from "./controllers/user.controller";
+import fileController from "./controllers/file.controller";
 import {swagger} from '@elysiajs/swagger'
 import {cors} from '@elysiajs/cors'
 import {opentelemetry} from '@elysiajs/opentelemetry'
@@ -48,6 +49,7 @@ const startApp = async () => {
       .onError(errorMiddleware)
       .group("/api", group =>
         group.use(userController)
+        .use(fileController)
       )
       .listen(process.env.PORT || 3000);
 
