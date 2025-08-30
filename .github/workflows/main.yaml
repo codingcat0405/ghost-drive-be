@@ -2,8 +2,7 @@ name: deploy-ghost-drive-be
 
 on:
   push:
-    branches: 
-      - master
+    branches: master
 
 jobs:
   build-and-deploy:
@@ -15,4 +14,4 @@ jobs:
           commit_hash=$(git rev-parse --short $GITHUB_SHA)
           docker build -t localhost:32000/ghost-drive-be:$commit_hash .
           docker push localhost:32000/ghost-drive-be:$commit_hash
-          kubectl set image deployment/ghost-drive-be ghost-drive-be=localhost:32000/ghost-drive-be:$commit_hash -n torder
+          kubectl set image deployment/ghost-drive-be ghost-drive-be=localhost:32000/ghost-drive-be:$commit_hash -n ghost-drive-be
