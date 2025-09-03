@@ -28,7 +28,11 @@ class MinioService {
   * @returns the presigned url
   */
   async getUploadPresignedUrl(bucketName: string, objectKey: string) {
-    const url = await this.minioClient.presignedPutObject(bucketName, objectKey, this.expirationTime);
+    let url = await this.minioClient.presignedPutObject(bucketName, objectKey, this.expirationTime);
+    if(Number(process.env.MINIO_PORT) === 80) {
+      //remove :80 from the url
+      url = url.replace(':80', '');
+    }
     return url;
   }
 
@@ -38,7 +42,11 @@ class MinioService {
   * @returns the presigned url
   */
   async getDownloadPresignedUrl(bucketName: string, objectKey: string) {
-    const url = await this.minioClient.presignedGetObject(bucketName, objectKey, this.expirationTime);
+    let url = await this.minioClient.presignedGetObject(bucketName, objectKey, this.expirationTime);
+    if(Number(process.env.MINIO_PORT) === 80) {
+      //remove :80 from the url
+      url = url.replace(':80', '');
+    }
     return url;
   }
 

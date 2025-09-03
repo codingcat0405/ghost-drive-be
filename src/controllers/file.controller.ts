@@ -177,8 +177,7 @@ const fileController = new Elysia()
 
       // Get upload presigned URL for common uploads (avatars, etc.) - uses default bucket
       .post("/common/upload-url", async ({ body, fileService }) => {
-        const url = await fileService.getCommonUploadPresignedUrl(body.objectKey);
-        return { uploadUrl: url };
+        return await fileService.getCommonUploadPresignedUrl(body.objectKey);
       }, {
         checkAuth: ['user'],
         detail: {
@@ -191,26 +190,10 @@ const fileController = new Elysia()
         })
       })
 
-      // Get download presigned URL for common downloads - uses default bucket
-      .post("/common/download-url", async ({ body, fileService }) => {
-        const url = await fileService.getCommonDownloadPresignedUrl(body.objectKey);
-        return { downloadUrl: url };
-      }, {
-        checkAuth: ['user'],
-        detail: {
-          tags: ["File"],
-          security: [{ JwtAuth: [] }],
-          description: "Get presigned URL for common file download - uses default bucket"
-        },
-        body: t.Object({
-          objectKey: t.String({ description: "S3 object key for the common file" })
-        })
-      })
-
       // Get directory tree
       .get("/tree", async ({ query, user, fileService }) => {
         return await fileService.getDirectoryTree(
-          user.id, 
+          user.id,
           query.path,
           query.page ? parseInt(query.page) : 1,
           query.limit ? parseInt(query.limit) : 20

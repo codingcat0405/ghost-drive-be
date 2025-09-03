@@ -1,23 +1,16 @@
 import { File } from "../entities/File";
-import { User } from "../entities/User";
 import MinioService from "./MinioService";
 import { initORM } from "../db";
 import { Page, toPageDTO } from "../utils/pagination";
 
 class FileService {
-  private minioService: MinioService | null = null;
-  private defaultBucketName: string;
+  private minioService: MinioService;
 
   constructor() {
-    this.defaultBucketName = 'ghost-drive'; // Default bucket for common uploads (avatars, etc.)
+    this.minioService = new MinioService();
   }
 
-  private getMinioService(): MinioService {
-    if (!this.minioService) {
-      this.minioService = new MinioService();
-    }
-    return this.minioService;
-  }
+
 
   /**
    * Get user's bucket name from database
@@ -36,7 +29,7 @@ class FileService {
    */
   async getUploadPresignedUrl(objectKey: string, userId: number): Promise<string> {
     const bucketName = await this.getUserBucketName(userId);
-    return await this.getMinioService().getUploadPresignedUrl(bucketName, objectKey);
+    return await this.minioService.getUploadPresignedUrl(bucketName, objectKey);
   }
 
   /**
@@ -44,22 +37,24 @@ class FileService {
    */
   async getDownloadPresignedUrl(objectKey: string, userId: number): Promise<string> {
     const bucketName = await this.getUserBucketName(userId);
-    return await this.getMinioService().getDownloadPresignedUrl(bucketName, objectKey);
+    return await this.minioService.getDownloadPresignedUrl(bucketName, objectKey);
   }
 
   /**
    * Get presigned URL for common uploads (uses default bucket)
    */
-  async getCommonUploadPresignedUrl(objectKey: string): Promise<string> {
-    return await this.getMinioService().getUploadPresignedUrl(this.defaultBucketName, objectKey);
+  async getCommonUploadPresignedUrl(objectKey: string) {
+    const presignedUrl = await this.minioService.getUploadPresignedUrl(process.env.MINIO_COMMON_BUCKET!, objectKey);
+    //download url is the presigned url without the query params
+    const downloadUrl = new URL(presignedUrl);
+    downloadUrl.search = '';
+    console.log(presignedUrl);
+    return {
+      presignedUrl: presignedUrl,
+      downloadUrl: downloadUrl
+    }
   }
 
-  /**
-   * Get presigned URL for common downloads (uses default bucket)
-   */
-  async getCommonDownloadPresignedUrl(objectKey: string): Promise<string> {
-    return await this.getMinioService().getDownloadPresignedUrl(this.defaultBucketName, objectKey);
-  }
 
   /**
    * Create a new file record
@@ -73,10 +68,10 @@ class FileService {
     mimeType?: string
   ): Promise<File> {
     const { services } = await this.getServices();
-    
+
     // Validate path format
     this.validatePath(path);
-    
+
     const file = new File();
     file.name = name;
     file.objectKey = objectKey;
@@ -86,7 +81,7 @@ class FileService {
     if (mimeType) {
       file.mimeType = mimeType;
     }
-    
+
     await services.em.persistAndFlush(file);
     return file;
   }
@@ -96,7 +91,7 @@ class FileService {
    */
   async getFileById(fileId: number, userId: number): Promise<File | null> {
     const { services } = await this.getServices();
-    
+
     return await services.file.findOne({ id: fileId, userId });
   }
 
@@ -104,13 +99,13 @@ class FileService {
    * Update file (name and path only - virtual changes)
    */
   async updateFile(
-    fileId: number, 
-    userId: number, 
-    name?: string, 
+    fileId: number,
+    userId: number,
+    name?: string,
     path?: string
   ): Promise<File | null> {
     const { services } = await this.getServices();
-    
+
     const file = await this.getFileById(fileId, userId);
     if (!file) {
       return null;
@@ -139,7 +134,7 @@ class FileService {
    */
   async deleteFile(fileId: number, userId: number): Promise<boolean> {
     const { services } = await this.getServices();
-    
+
     const file = await this.getFileById(fileId, userId);
     if (!file) {
       return false;
@@ -148,10 +143,10 @@ class FileService {
     try {
       // Get user's bucket name
       const bucketName = await this.getUserBucketName(userId);
-      
+
       // Delete from S3
-      await this.getMinioService().deleteFile(bucketName, file.objectKey);
-      
+      await this.minioService.deleteFile(bucketName, file.objectKey);
+
       // Delete from database
       await services.em.removeAndFlush(file);
       return true;
@@ -171,7 +166,7 @@ class FileService {
     limit: number = 20
   ): Promise<Page<File>> {
     const { services } = await this.getServices();
-    
+
     const offset = (page - 1) * limit;
 
     // Build where clause
@@ -193,27 +188,27 @@ class FileService {
    * Get files and folders in a specific directory (non-recursive) with pagination
    */
   async getDirectoryTree(
-    userId: number, 
-    path: string = '/', 
-    page: number = 1, 
+    userId: number,
+    path: string = '/',
+    page: number = 1,
     limit: number = 20
   ): Promise<Page<File>> {
     const { services } = await this.getServices();
-    
+
     // Normalize path - ensure it ends with / for proper matching
     const normalizedPath = path.endsWith('/') ? path : `${path}/`;
-    
+
     const offset = (page - 1) * limit;
-    
+
     // Get only direct children of the specified path with pagination
     const findAndCount = await services.file.findAndCount({
       userId,
       path: normalizedPath
     }, {
-      orderBy: { 
+      orderBy: {
         // Directories first (by mimeType), then by name
         mimeType: 'ASC', // 'application/x-directory' comes before other types
-        name: 'ASC' 
+        name: 'ASC'
       },
       limit,
       offset,
@@ -226,15 +221,15 @@ class FileService {
    * Search files by name or path
    */
   async searchFiles(
-    userId: number, 
-    query: string, 
-    page: number = 1, 
+    userId: number,
+    query: string,
+    page: number = 1,
     limit: number = 20
   ): Promise<Page<File>> {
     const { services } = await this.getServices();
-    
+
     const offset = (page - 1) * limit;
-    
+
     // Search by name containing the query
     const findAndCount = await services.file.findAndCount({
       userId,
@@ -244,7 +239,7 @@ class FileService {
       limit,
       offset,
     });
-    
+
     return toPageDTO(findAndCount, page, limit);
   }
 
@@ -255,7 +250,7 @@ class FileService {
     if (!path.startsWith('/')) {
       throw new Error('Path must start with /');
     }
-    
+
     // Check for invalid characters
     if (path.includes('..') || path.includes('//')) {
       throw new Error('Invalid path format');
