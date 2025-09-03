@@ -1,14 +1,15 @@
 import { File } from "../entities/File";
+import { User } from "../entities/User";
 import MinioService from "./MinioService";
 import { initORM } from "../db";
 import { Page, toPageDTO } from "../utils/pagination";
 
 class FileService {
   private minioService: MinioService | null = null;
-  private bucketName: string;
+  private defaultBucketName: string;
 
   constructor() {
-    this.bucketName = 'ghost-drive'; // Default bucket name
+    this.defaultBucketName = 'ghost-drive'; // Default bucket for common uploads (avatars, etc.)
   }
 
   private getMinioService(): MinioService {
@@ -19,17 +20,45 @@ class FileService {
   }
 
   /**
-   * Get presigned URL for file upload
+   * Get user's bucket name from database
    */
-  async getUploadPresignedUrl(objectKey: string): Promise<string> {
-    return await this.getMinioService().getUploadPresignedUrl(this.bucketName, objectKey);
+  private async getUserBucketName(userId: number): Promise<string> {
+    const { services } = await this.getServices();
+    const user = await services.user.findOne({ id: userId });
+    if (!user || !user.bucketName) {
+      throw new Error('User not found or bucket name not set');
+    }
+    return user.bucketName;
   }
 
   /**
-   * Get presigned URL for file download
+   * Get presigned URL for file upload (uses user's bucket)
    */
-  async getDownloadPresignedUrl(objectKey: string): Promise<string> {
-    return await this.getMinioService().getDownloadPresignedUrl(this.bucketName, objectKey);
+  async getUploadPresignedUrl(objectKey: string, userId: number): Promise<string> {
+    const bucketName = await this.getUserBucketName(userId);
+    return await this.getMinioService().getUploadPresignedUrl(bucketName, objectKey);
+  }
+
+  /**
+   * Get presigned URL for file download (uses user's bucket)
+   */
+  async getDownloadPresignedUrl(objectKey: string, userId: number): Promise<string> {
+    const bucketName = await this.getUserBucketName(userId);
+    return await this.getMinioService().getDownloadPresignedUrl(bucketName, objectKey);
+  }
+
+  /**
+   * Get presigned URL for common uploads (uses default bucket)
+   */
+  async getCommonUploadPresignedUrl(objectKey: string): Promise<string> {
+    return await this.getMinioService().getUploadPresignedUrl(this.defaultBucketName, objectKey);
+  }
+
+  /**
+   * Get presigned URL for common downloads (uses default bucket)
+   */
+  async getCommonDownloadPresignedUrl(objectKey: string): Promise<string> {
+    return await this.getMinioService().getDownloadPresignedUrl(this.defaultBucketName, objectKey);
   }
 
   /**
@@ -93,7 +122,12 @@ class FileService {
 
     if (path !== undefined) {
       this.validatePath(path);
-      file.path = path;
+      // Ensure new path ends with / for directories
+      if (file.mimeType === 'application/x-directory') {
+        file.path = path.endsWith('/') ? path : `${path}/`;
+      } else {
+        file.path = path;
+      }
     }
 
     await services.em.flush();
@@ -112,8 +146,11 @@ class FileService {
     }
 
     try {
+      // Get user's bucket name
+      const bucketName = await this.getUserBucketName(userId);
+      
       // Delete from S3
-      await this.getMinioService().deleteFile(this.bucketName, file.objectKey);
+      await this.getMinioService().deleteFile(bucketName, file.objectKey);
       
       // Delete from database
       await services.em.removeAndFlush(file);
@@ -153,67 +190,28 @@ class FileService {
   }
 
   /**
-   * Get all files in a directory tree (recursive)
+   * Get files and folders in a specific directory (non-recursive)
    */
   async getDirectoryTree(userId: number, path: string = '/'): Promise<File[]> {
     const { services } = await this.getServices();
     
-    // Get all files that start with the given path
+    // Normalize path - ensure it ends with / for proper matching
+    const normalizedPath = path.endsWith('/') ? path : `${path}/`;
+    
+    // Get only direct children of the specified path
+    // This means files where the path exactly matches the given path
     const files = await services.file.find({
       userId,
-      path: { $like: `${path}%` }
+      path: normalizedPath
     }, {
-      orderBy: { path: 'ASC', name: 'ASC' }
+      orderBy: { 
+        // Directories first (by mimeType), then by name
+        mimeType: 'ASC', // 'application/x-directory' comes before other types
+        name: 'ASC' 
+      }
     });
 
     return files;
-  }
-
-  /**
-   * Create a directory (virtual - just a file with no size)
-   */
-  async createDirectory(name: string, path: string, userId: number): Promise<File> {
-    const { services } = await this.getServices();
-    
-    this.validatePath(path);
-    
-    // Ensure path ends with /
-    const normalizedPath = path.endsWith('/') ? path : `${path}/`;
-    
-    const directory = new File();
-    directory.name = name;
-    directory.objectKey = `directory_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    directory.path = normalizedPath;
-    directory.size = 0;
-    directory.mimeType = 'application/x-directory';
-    directory.userId = userId;
-    
-    await services.em.persistAndFlush(directory);
-    return directory;
-  }
-
-  /**
-   * Move file to different directory
-   */
-  async moveFile(fileId: number, userId: number, newPath: string): Promise<File | null> {
-    const { services } = await this.getServices();
-    
-    const file = await this.getFileById(fileId, userId);
-    if (!file) {
-      return null;
-    }
-
-    this.validatePath(newPath);
-    
-    // Ensure new path ends with / for directories
-    if (file.mimeType === 'application/x-directory') {
-      file.path = newPath.endsWith('/') ? newPath : `${newPath}/`;
-    } else {
-      file.path = newPath;
-    }
-
-    await services.em.flush();
-    return file;
   }
 
   /**
@@ -229,13 +227,10 @@ class FileService {
     
     const offset = (page - 1) * limit;
     
-    // Search by name or path containing the query
+    // Search by name containing the query
     const findAndCount = await services.file.findAndCount({
       userId,
-      $or: [
-        { name: { $ilike: `%${query}%` } },
-        { path: { $ilike: `%${query}%` } }
-      ]
+      name: { $ilike: `%${query}%` }
     }, {
       orderBy: { updatedAt: 'DESC' },
       limit,

@@ -144,8 +144,8 @@ const fileController = new Elysia()
       })
 
       // Get upload presigned URL
-      .post("/upload-url", async ({ body, fileService }) => {
-        const url = await fileService.getUploadPresignedUrl(body.objectKey);
+      .post("/upload-url", async ({ body, user, fileService }) => {
+        const url = await fileService.getUploadPresignedUrl(body.objectKey, user.id);
         return { uploadUrl: url };
       }, {
         checkAuth: ['user'],
@@ -160,8 +160,8 @@ const fileController = new Elysia()
       })
 
       // Get download presigned URL
-      .post("/download-url", async ({ body, fileService }) => {
-        const url = await fileService.getDownloadPresignedUrl(body.objectKey);
+      .post("/download-url", async ({ body, user, fileService }) => {
+        const url = await fileService.getDownloadPresignedUrl(body.objectKey, user.id);
         return { downloadUrl: url };
       }, {
         checkAuth: ['user'],
@@ -175,41 +175,35 @@ const fileController = new Elysia()
         })
       })
 
-      // Create directory
-      .post("/directories", async ({ body, user, fileService }) => {
-        return await fileService.createDirectory(body.name, body.path, user.id);
+      // Get upload presigned URL for common uploads (avatars, etc.) - uses default bucket
+      .post("/common/upload-url", async ({ body, fileService }) => {
+        const url = await fileService.getCommonUploadPresignedUrl(body.objectKey);
+        return { uploadUrl: url };
       }, {
         checkAuth: ['user'],
         detail: {
           tags: ["File"],
           security: [{ JwtAuth: [] }],
-          description: "Create a virtual directory"
+          description: "Get presigned URL for common file upload (avatars, etc.) - uses default bucket"
         },
         body: t.Object({
-          name: t.String({ description: "Directory name" }),
-          path: t.String({ description: "Directory path (must start with /)" })
+          objectKey: t.String({ description: "S3 object key for the common file" })
         })
       })
 
-      // Move file
-      .patch("/:fileId/move", async ({ params, body, user, fileService }) => {
-        const file = await fileService.moveFile(parseInt(params.fileId), user.id, body.newPath);
-        if (!file) {
-          throw new Error('File not found');
-        }
-        return file;
+      // Get download presigned URL for common downloads - uses default bucket
+      .post("/common/download-url", async ({ body, fileService }) => {
+        const url = await fileService.getCommonDownloadPresignedUrl(body.objectKey);
+        return { downloadUrl: url };
       }, {
         checkAuth: ['user'],
         detail: {
           tags: ["File"],
           security: [{ JwtAuth: [] }],
-          description: "Move file to different directory"
+          description: "Get presigned URL for common file download - uses default bucket"
         },
-        params: t.Object({
-          fileId: t.String({ description: "File ID" })
-        }),
         body: t.Object({
-          newPath: t.String({ description: "New file path" })
+          objectKey: t.String({ description: "S3 object key for the common file" })
         })
       })
 
