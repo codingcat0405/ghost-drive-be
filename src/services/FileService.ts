@@ -190,17 +190,23 @@ class FileService {
   }
 
   /**
-   * Get files and folders in a specific directory (non-recursive)
+   * Get files and folders in a specific directory (non-recursive) with pagination
    */
-  async getDirectoryTree(userId: number, path: string = '/'): Promise<File[]> {
+  async getDirectoryTree(
+    userId: number, 
+    path: string = '/', 
+    page: number = 1, 
+    limit: number = 20
+  ): Promise<Page<File>> {
     const { services } = await this.getServices();
     
     // Normalize path - ensure it ends with / for proper matching
     const normalizedPath = path.endsWith('/') ? path : `${path}/`;
     
-    // Get only direct children of the specified path
-    // This means files where the path exactly matches the given path
-    const files = await services.file.find({
+    const offset = (page - 1) * limit;
+    
+    // Get only direct children of the specified path with pagination
+    const findAndCount = await services.file.findAndCount({
       userId,
       path: normalizedPath
     }, {
@@ -208,10 +214,12 @@ class FileService {
         // Directories first (by mimeType), then by name
         mimeType: 'ASC', // 'application/x-directory' comes before other types
         name: 'ASC' 
-      }
+      },
+      limit,
+      offset,
     });
 
-    return files;
+    return toPageDTO(findAndCount, page, limit);
   }
 
   /**

@@ -209,16 +209,23 @@ const fileController = new Elysia()
 
       // Get directory tree
       .get("/tree", async ({ query, user, fileService }) => {
-        return await fileService.getDirectoryTree(user.id, query.path);
+        return await fileService.getDirectoryTree(
+          user.id, 
+          query.path,
+          query.page ? parseInt(query.page) : 1,
+          query.limit ? parseInt(query.limit) : 20
+        );
       }, {
         checkAuth: ['user'],
         detail: {
           tags: ["File"],
           security: [{ JwtAuth: [] }],
-          description: "Get directory tree (recursive file listing)"
+          description: "Get directory tree with pagination (non-recursive listing)"
         },
         query: t.Object({
-          path: t.Optional(t.String({ description: "Root path (default: /)" }))
+          path: t.Optional(t.String({ description: "Root path (default: /)" })),
+          page: t.Optional(t.String({ description: "Page number (default: 1)" })),
+          limit: t.Optional(t.String({ description: "Items per page (default: 20)" }))
         })
       })
   );
