@@ -1,276 +1,230 @@
 import { Elysia, t } from "elysia";
-import authMacro from "../macros/auth";
 import FileService from "../services/FileService";
-import { File } from "../entities/File";
+import authMacro from "../macros/auth";
 
-const fileService = new FileService();
 const fileController = new Elysia()
+  .decorate('fileService', new FileService())
+  .use(authMacro)
   .group("/files", group =>
     group
-      .use(authMacro)
-      
-      // Get presigned URL for file upload
-      .post("/upload-url", async ({ user, body }) => {
-        const objectKey = `${user.id}/${Date.now()}_${body.fileName}`;
-        const uploadUrl = await fileService.getUploadPresignedUrl(objectKey);
-        
-        return {
-          uploadUrl,
-          objectKey,
-          expiresIn: 24 * 60 * 60 // 24 hours in seconds
-        };
-      }, {
-        checkAuth: ['user'],
-        detail: {
-          tags: ["Files"],
-          summary: "Get presigned URL for file upload",
-          security: [{ JwtAuth: [] }],
-        },
-        body: t.Object({
-          fileName: t.String(),
-        })
-      })
-      
-      // Get presigned URL for file download
-      .get("/download-url/:fileId", async ({ user, params }) => {
-        const file = await fileService.getFileById(parseInt(params.fileId), user.id);
-        if (!file) {
-          throw new Error('File not found');
-        }
-        
-        const downloadUrl = await fileService.getDownloadPresignedUrl(file.objectKey);
-        
-        return {
-          downloadUrl,
-          fileName: file.name,
-          expiresIn: 24 * 60 * 60 // 24 hours in seconds
-        };
-      }, {
-        checkAuth: ['user'],
-        detail: {
-          tags: ["Files"],
-          summary: "Get presigned URL for file download",
-          security: [{ JwtAuth: [] }],
-        },
-        params: t.Object({
-          fileId: t.String(),
-        })
-      })
-      
-      // Create file record (after successful upload)
-      .post("/create", async ({ user, body }) => {
-        const fileData = {
-          name: body.name,
-          objectKey: body.objectKey,
-          path: body.path,
-          size: body.size,
-          mimeType: body.mimeType,
-          userId: user.id
-        };
-        
-        const file = await fileService.createFile(fileData);
-        return file;
-      }, {
-        checkAuth: ['user'],
-        detail: {
-          tags: ["Files"],
-          summary: "Create file record after upload",
-          security: [{ JwtAuth: [] }],
-        },
-        body: t.Object({
-          name: t.String(),
-          objectKey: t.String(),
-          path: t.String(),
-          size: t.Number(),
-          mimeType: t.Optional(t.String()),
-        })
-      })
-      
-      // Get file details
-      .get("/:fileId", async ({ user, params }) => {
-        const file = await fileService.getFileById(parseInt(params.fileId), user.id);
-        if (!file) {
-          throw new Error('File not found');
-        }
-        return file;
-      }, {
-        checkAuth: ['user'],
-        detail: {
-          tags: ["Files"],
-          summary: "Get file details",
-          security: [{ JwtAuth: [] }],
-        },
-        params: t.Object({
-          fileId: t.String(),
-        })
-      })
-      
-      // Update file (rename, move)
-      .put("/:fileId", async ({ user, params, body }) => {
-        const file = await fileService.updateFile(
-          parseInt(params.fileId), 
-          user.id, 
-          body
+      // Create a new file record
+      .post("/", async ({ body, user, fileService }) => {
+        return await fileService.createFile(
+          body.name,
+          body.objectKey,
+          body.path,
+          body.size,
+          user.id,
+          body.mimeType
         );
-        
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["File"],
+          security: [{ JwtAuth: [] }],
+          description: "Create a new file record"
+        },
+        body: t.Object({
+          name: t.String({ description: "File name" }),
+          objectKey: t.String({ description: "S3 object key" }),
+          path: t.String({ description: "File path (must start with /)" }),
+          size: t.Number({ description: "File size in bytes" }),
+          mimeType: t.Optional(t.String({ description: "MIME type" }))
+        })
+      })
+
+      // Get files with pagination
+      .get("/", async ({ query, user, fileService }) => {
+        return await fileService.listFiles(
+          user.id,
+          query.path,
+          query.page ? parseInt(query.page) : 1,
+          query.limit ? parseInt(query.limit) : 20
+        );
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["File"],
+          security: [{ JwtAuth: [] }],
+          description: "List files with pagination"
+        },
+        query: t.Object({
+          path: t.Optional(t.String({ description: "Filter by path" })),
+          page: t.Optional(t.String({ description: "Page number (default: 1)" })),
+          limit: t.Optional(t.String({ description: "Items per page (default: 20)" }))
+        })
+      })
+
+      // Get file by ID
+      .get("/:fileId", async ({ params, user, fileService }) => {
+        const file = await fileService.getFileById(parseInt(params.fileId), user.id);
         if (!file) {
           throw new Error('File not found');
         }
-        
         return file;
       }, {
         checkAuth: ['user'],
         detail: {
-          tags: ["Files"],
-          summary: "Update file (rename, move)",
+          tags: ["File"],
           security: [{ JwtAuth: [] }],
+          description: "Get file by ID"
         },
         params: t.Object({
-          fileId: t.String(),
+          fileId: t.String({ description: "File ID" })
+        })
+      })
+
+      // Update file
+      .put("/:fileId", async ({ params, body, user, fileService }) => {
+        const file = await fileService.updateFile(
+          parseInt(params.fileId),
+          user.id,
+          body.name,
+          body.path
+        );
+        if (!file) {
+          throw new Error('File not found');
+        }
+        return file;
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["File"],
+          security: [{ JwtAuth: [] }],
+          description: "Update file name or path"
+        },
+        params: t.Object({
+          fileId: t.String({ description: "File ID" })
         }),
         body: t.Object({
-          name: t.Optional(t.String()),
-          path: t.Optional(t.String()),
+          name: t.Optional(t.String({ description: "New file name" })),
+          path: t.Optional(t.String({ description: "New file path" }))
         })
       })
-      
+
       // Delete file
-      .delete("/:fileId", async ({ user, params }) => {
+      .delete("/:fileId", async ({ params, user, fileService }) => {
         const success = await fileService.deleteFile(parseInt(params.fileId), user.id);
-        
         if (!success) {
           throw new Error('File not found or could not be deleted');
         }
-        
         return { message: 'File deleted successfully' };
       }, {
         checkAuth: ['user'],
         detail: {
-          tags: ["Files"],
-          summary: "Delete file",
+          tags: ["File"],
           security: [{ JwtAuth: [] }],
+          description: "Delete file"
         },
         params: t.Object({
-          fileId: t.String(),
+          fileId: t.String({ description: "File ID" })
         })
       })
-      
-      // List files by directory
-      .get("/", async ({ user, query }) => {
-        const listQuery = {
-          userId: user.id,
-          path: query.path,
-          page: query.page ? parseInt(query.page) : 1,
-          limit: query.limit ? parseInt(query.limit) : 20
-        };
-        
-        return await fileService.listFiles(listQuery);
+
+      // Search files
+      .get("/search", async ({ query, user, fileService }) => {
+        return await fileService.searchFiles(
+          user.id,
+          query.q,
+          query.page ? parseInt(query.page) : 1,
+          query.limit ? parseInt(query.limit) : 20
+        );
       }, {
         checkAuth: ['user'],
         detail: {
-          tags: ["Files"],
-          summary: "List files by directory",
+          tags: ["File"],
           security: [{ JwtAuth: [] }],
+          description: "Search files by name or path"
         },
         query: t.Object({
-          path: t.Optional(t.String()),
-          page: t.Optional(t.String()),
-          limit: t.Optional(t.String()),
+          q: t.String({ description: "Search query" }),
+          page: t.Optional(t.String({ description: "Page number (default: 1)" })),
+          limit: t.Optional(t.String({ description: "Items per page (default: 20)" }))
         })
       })
-      
-      // Get directory tree
-      .get("/tree/:path(*)", async ({ user, params }) => {
-        const path = decodeURIComponent(params.path);
-        return await fileService.getDirectoryTree(user.id, path);
+
+      // Get upload presigned URL
+      .post("/upload-url", async ({ body, fileService }) => {
+        const url = await fileService.getUploadPresignedUrl(body.objectKey);
+        return { uploadUrl: url };
       }, {
         checkAuth: ['user'],
         detail: {
-          tags: ["Files"],
-          summary: "Get directory tree",
+          tags: ["File"],
           security: [{ JwtAuth: [] }],
-        },
-        params: t.Object({
-          path: t.String(),
-        })
-      })
-      
-      // Create directory
-      .post("/directory", async ({ user, body }) => {
-        const directory = await fileService.createDirectory(
-          body.name,
-          body.path,
-          user.id
-        );
-        
-        return directory;
-      }, {
-        checkAuth: ['user'],
-        detail: {
-          tags: ["Files"],
-          summary: "Create directory",
-          security: [{ JwtAuth: [] }],
+          description: "Get presigned URL for file upload"
         },
         body: t.Object({
-          name: t.String(),
-          path: t.String(),
+          objectKey: t.String({ description: "S3 object key for the file" })
         })
       })
-      
-      // Move file to different directory
-      .post("/:fileId/move", async ({ user, params, body }) => {
-        const file = await fileService.moveFile(
-          parseInt(params.fileId),
-          user.id,
-          body.newPath
-        );
-        
+
+      // Get download presigned URL
+      .post("/download-url", async ({ body, fileService }) => {
+        const url = await fileService.getDownloadPresignedUrl(body.objectKey);
+        return { downloadUrl: url };
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["File"],
+          security: [{ JwtAuth: [] }],
+          description: "Get presigned URL for file download"
+        },
+        body: t.Object({
+          objectKey: t.String({ description: "S3 object key for the file" })
+        })
+      })
+
+      // Create directory
+      .post("/directories", async ({ body, user, fileService }) => {
+        return await fileService.createDirectory(body.name, body.path, user.id);
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["File"],
+          security: [{ JwtAuth: [] }],
+          description: "Create a virtual directory"
+        },
+        body: t.Object({
+          name: t.String({ description: "Directory name" }),
+          path: t.String({ description: "Directory path (must start with /)" })
+        })
+      })
+
+      // Move file
+      .patch("/:fileId/move", async ({ params, body, user, fileService }) => {
+        const file = await fileService.moveFile(parseInt(params.fileId), user.id, body.newPath);
         if (!file) {
           throw new Error('File not found');
         }
-        
         return file;
       }, {
         checkAuth: ['user'],
         detail: {
-          tags: ["Files"],
-          summary: "Move file to different directory",
+          tags: ["File"],
           security: [{ JwtAuth: [] }],
+          description: "Move file to different directory"
         },
         params: t.Object({
-          fileId: t.String(),
+          fileId: t.String({ description: "File ID" })
         }),
         body: t.Object({
-          newPath: t.String(),
+          newPath: t.String({ description: "New file path" })
         })
       })
-      
-      // Search files
-      .get("/search/:query", async ({ user, params, query }) => {
-        const searchQuery = decodeURIComponent(params.query);
-        const page = query.page ? parseInt(query.page) : 1;
-        const limit = query.limit ? parseInt(query.limit) : 20;
-        
-        // Use the FileService to search files
-        const result = await fileService.searchFiles(user.id, searchQuery, page, limit);
-        
-        return {
-          ...result,
-          query: searchQuery
-        };
+
+      // Get directory tree
+      .get("/tree", async ({ query, user, fileService }) => {
+        return await fileService.getDirectoryTree(user.id, query.path);
       }, {
         checkAuth: ['user'],
         detail: {
-          tags: ["Files"],
-          summary: "Search files by name or path",
+          tags: ["File"],
           security: [{ JwtAuth: [] }],
+          description: "Get directory tree (recursive file listing)"
         },
-        params: t.Object({
-          query: t.String(),
-        }),
         query: t.Object({
-          page: t.Optional(t.String()),
-          limit: t.Optional(t.String()),
+          path: t.Optional(t.String({ description: "Root path (default: /)" }))
         })
       })
   );

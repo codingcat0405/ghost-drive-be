@@ -1,35 +1,7 @@
 import { File } from "../entities/File";
 import MinioService from "./MinioService";
 import { initORM } from "../db";
-
-export interface CreateFileDto {
-  name: string;
-  objectKey: string;
-  path: string;
-  size: number;
-  mimeType?: string;
-  userId: number;
-}
-
-export interface UpdateFileDto {
-  name?: string;
-  path?: string;
-}
-
-export interface ListFilesQuery {
-  path?: string;
-  userId: number;
-  page?: number;
-  limit?: number;
-}
-
-export interface FileListResponse {
-  files: File[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
+import { Page, toPageDTO } from "../utils/pagination";
 
 class FileService {
   private minioService: MinioService | null = null;
@@ -63,14 +35,28 @@ class FileService {
   /**
    * Create a new file record
    */
-  async createFile(fileData: CreateFileDto): Promise<File> {
+  async createFile(
+    name: string,
+    objectKey: string,
+    path: string,
+    size: number,
+    userId: number,
+    mimeType?: string
+  ): Promise<File> {
     const { services } = await this.getServices();
     
     // Validate path format
-    this.validatePath(fileData.path);
+    this.validatePath(path);
     
     const file = new File();
-    Object.assign(file, fileData);
+    file.name = name;
+    file.objectKey = objectKey;
+    file.path = path;
+    file.size = size;
+    file.userId = userId;
+    if (mimeType) {
+      file.mimeType = mimeType;
+    }
     
     await services.em.persistAndFlush(file);
     return file;
@@ -88,7 +74,12 @@ class FileService {
   /**
    * Update file (name and path only - virtual changes)
    */
-  async updateFile(fileId: number, userId: number, updateData: UpdateFileDto): Promise<File | null> {
+  async updateFile(
+    fileId: number, 
+    userId: number, 
+    name?: string, 
+    path?: string
+  ): Promise<File | null> {
     const { services } = await this.getServices();
     
     const file = await this.getFileById(fileId, userId);
@@ -96,13 +87,13 @@ class FileService {
       return null;
     }
 
-    if (updateData.name !== undefined) {
-      file.name = updateData.name;
+    if (name !== undefined) {
+      file.name = name;
     }
 
-    if (updateData.path !== undefined) {
-      this.validatePath(updateData.path);
-      file.path = updateData.path;
+    if (path !== undefined) {
+      this.validatePath(path);
+      file.path = path;
     }
 
     await services.em.flush();
@@ -136,32 +127,29 @@ class FileService {
   /**
    * List files by directory with pagination
    */
-  async listFiles(query: ListFilesQuery): Promise<FileListResponse> {
+  async listFiles(
+    userId: number,
+    path?: string,
+    page: number = 1,
+    limit: number = 20
+  ): Promise<Page<File>> {
     const { services } = await this.getServices();
     
-    const page = query.page || 1;
-    const limit = query.limit || 20;
     const offset = (page - 1) * limit;
 
     // Build where clause
-    const whereClause: any = { userId: query.userId };
-    if (query.path) {
-      whereClause.path = query.path;
+    const whereClause: any = { userId };
+    if (path) {
+      whereClause.path = path;
     }
 
-    const [files, total] = await services.file.findAndCount(whereClause, {
+    const findAndCount = await services.file.findAndCount(whereClause, {
       orderBy: { createdAt: 'DESC' },
       limit,
       offset,
     });
 
-    return {
-      files,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+    return toPageDTO(findAndCount, page, limit);
   }
 
   /**
@@ -231,13 +219,18 @@ class FileService {
   /**
    * Search files by name or path
    */
-  async searchFiles(userId: number, query: string, page: number = 1, limit: number = 20): Promise<FileListResponse> {
+  async searchFiles(
+    userId: number, 
+    query: string, 
+    page: number = 1, 
+    limit: number = 20
+  ): Promise<Page<File>> {
     const { services } = await this.getServices();
     
     const offset = (page - 1) * limit;
     
     // Search by name or path containing the query
-    const [files, total] = await services.file.findAndCount({
+    const findAndCount = await services.file.findAndCount({
       userId,
       $or: [
         { name: { $ilike: `%${query}%` } },
@@ -249,13 +242,7 @@ class FileService {
       offset,
     });
     
-    return {
-      files,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+    return toPageDTO(findAndCount, page, limit);
   }
 
   /**
