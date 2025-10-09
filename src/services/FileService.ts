@@ -257,6 +257,30 @@ class FileService {
     }
   }
 
+  async initMultipartUpload(userId: number, objectKey: string, totalChunks: number) {
+    const { services } = await this.getServices();
+    const user = await services.user.findOne({ id: userId });
+    if (!user) {
+      throw new Error('User not found');
+    }
+    const bucketName = user.bucketName;
+    const fileId = crypto.randomUUID();
+    return await this.minioService.initMultipartUpload(bucketName, fileId, objectKey, totalChunks);
+  }
+
+  async completeMultipartUpload(userId: number, objectKey: string, uploadId: string, parts: {
+    PartNumber: number;
+    ETag: string;
+  }[]) {
+    const { services } = await this.getServices();
+    const user = await services.user.findOne({ id: userId });
+    if (!user) {
+      throw new Error('User not found');
+    }
+    const bucketName = user.bucketName;
+    return await this.minioService.completeMultipartUpload(bucketName, objectKey, uploadId, parts);
+  }
+
   /**
    * Get database services
    */

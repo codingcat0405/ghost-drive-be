@@ -159,6 +159,41 @@ const fileController = new Elysia()
         })
       })
 
+      .post("/upload-multipart-url", async ({ body, user, fileService }) => {
+        const url = await fileService.initMultipartUpload(user.id, body.objectKey, body.totalChunks);
+        return { uploadUrl: url };
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["File"],
+          security: [{ JwtAuth: [] }],
+          description: "Get presigned URL for file upload"
+        },
+        body: t.Object({
+          objectKey: t.String({ description: "S3 object key for the file" }),
+          totalChunks: t.Number({ description: "Total number of chunks" })
+        })
+      })
+      .post("/complete-multipart-upload", async ({ body, user, fileService }) => {
+        const url = await fileService.completeMultipartUpload(user.id, body.objectKey, body.uploadId, body.parts);
+        return { uploadUrl: url };
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["File"],
+          security: [{ JwtAuth: [] }],
+          description: "Complete multipart upload"
+        },
+        body: t.Object({
+          objectKey: t.String({ description: "S3 object key for the file" }),
+          uploadId: t.String({ description: "Multipart upload ID" }),
+          parts: t.Array(t.Object({
+            PartNumber: t.Number({ description: "Part number" }),
+            ETag: t.String({ description: "ETag" })
+          }))
+        })
+      })
+
       // Get download presigned URL
       .post("/download-url", async ({ body, user, fileService }) => {
         const url = await fileService.getDownloadPresignedUrl(body.objectKey, user.id);

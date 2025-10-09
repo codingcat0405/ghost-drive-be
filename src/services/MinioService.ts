@@ -50,6 +50,7 @@ class MinioService {
     if (Number(process.env.MINIO_PORT) === 80) {
       //remove :80 from the url
       url = url.replace(':80', '');
+      url = url.replace('http://', 'https://');
     }
     return url;
   }
@@ -64,6 +65,7 @@ class MinioService {
     if (Number(process.env.MINIO_PORT) === 80) {
       //remove :80 from the url
       url = url.replace(':80', '');
+      url = url.replace('http://', 'https://');
     }
     return url;
   }
@@ -155,6 +157,7 @@ class MinioService {
 
     if (Number(process.env.MINIO_PORT) === 80) {
       url = url.replace(':80', '');
+      url = url.replace('http://', 'https://');
     }
 
     return url;
