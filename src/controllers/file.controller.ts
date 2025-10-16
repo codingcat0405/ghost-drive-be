@@ -160,8 +160,8 @@ const fileController = new Elysia()
       })
 
       .post("/upload-multipart-url", async ({ body, user, fileService }) => {
-        const url = await fileService.initMultipartUpload(user.id, body.objectKey, body.totalChunks);
-        return { uploadUrl: url };
+        return await fileService.initMultipartUpload(user.id, body.objectKey, body.totalChunks);
+        
       }, {
         checkAuth: ['user'],
         detail: {
@@ -175,8 +175,8 @@ const fileController = new Elysia()
         })
       })
       .post("/complete-multipart-upload", async ({ body, user, fileService }) => {
-        const url = await fileService.completeMultipartUpload(user.id, body.objectKey, body.uploadId, body.parts);
-        return { uploadUrl: url };
+        return await fileService.completeMultipartUpload(user.id, body.objectKey, body.uploadId, body.parts);
+
       }, {
         checkAuth: ['user'],
         detail: {
