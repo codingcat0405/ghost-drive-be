@@ -54,7 +54,9 @@ class UserService {
         id: Number(user.id),
         username: user.username,
         role: user.role,
-        bucketName: user.bucketName
+        bucketName: user.bucketName,
+        aesKeyEncrypted: user.aesKeyEncrypted,
+        avatar: user.avatar
       },
       jwt: token
     }
