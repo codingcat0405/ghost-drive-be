@@ -18,7 +18,9 @@ export class File extends BaseEntity {
   })
   path!: string; // this is the path of the file in frontend allow user to organize files via folders(directories)
 
-  @Property()
+  @Property({
+    type: "bigint",
+  })
   size!: number; //size in bytes can be use in future for user quotation and billing
 
   @Property({
