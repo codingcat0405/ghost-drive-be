@@ -27,6 +27,12 @@ class UserService {
       bucketName
     })
     await db.em.persistAndFlush(user)
+    //create root folder for user
+    const rootFolder = db.folder.create({
+      name: "/",
+      userId: user.id
+    })
+    await db.em.persistAndFlush(rootFolder)
     return {
       id: user.id,
       username: user.username,

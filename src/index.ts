@@ -8,12 +8,16 @@ import fileController from "./controllers/file.controller";
 import {swagger} from '@elysiajs/swagger'
 import {cors} from '@elysiajs/cors'
 import {opentelemetry} from '@elysiajs/opentelemetry'
+import folderController from "./controllers/folder.controller";
+import uploadController from "./controllers/upload.controller";
+
 
 const startApp = async () => {
   try {
     const dataSource = await initORM()
     //sync entities classes to database
     await dataSource.orm.getSchemaGenerator().updateSchema();
+    
     const app = new Elysia()
       .use(cors())
       .get("/", () => "It's works!")
@@ -50,6 +54,8 @@ const startApp = async () => {
       .group("/api", group =>
         group.use(userController)
         .use(fileController)
+        .use(folderController)
+        .use(uploadController)
       )
       .listen(process.env.PORT || 3000);
 

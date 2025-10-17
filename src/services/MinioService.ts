@@ -1,18 +1,18 @@
 import * as Minio from 'minio'
 
 
-interface MultipartUploadInit {
+export interface MultipartUploadInit {
   uploadId: string;
   fileId: string;
   objectName: string;
 }
 
-interface PartUrl {
+export interface PartUrl {
   partNumber: number;
   url: string;
 }
 
-interface UploadPart {
+export interface UploadPart {
   PartNumber: number;
   ETag: string;
 }
