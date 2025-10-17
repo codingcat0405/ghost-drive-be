@@ -130,7 +130,7 @@ class FileService {
 
   async createFolder(name: string, userId: number, parentId?: number): Promise<Folder> {
     const { services } = await this.getServices();
-    if(name === '/') {
+    if (name === '/') {
       throw new Error('Cannot create root folder');
     }
     const userRootFolder = await services.folder.findOne({ userId, parentId: null });
@@ -189,7 +189,7 @@ class FileService {
     if (!folder) {
       throw new Error('Folder not found or not belongs to this user');
     }
-    if(folder.parentId === null) {
+    if (folder.parentId === null) {
       throw new Error('Cannot delete root folder');
     }
     const files = await services.file.find({ folderId });
@@ -275,7 +275,56 @@ class FileService {
 
     return toPageDTO(findAndCount, page, limit);
   }
+  /**
+   * List files and folders combined with pagination
+   */
+  async listContents(
+    userId: number,
+    folderId?: number,
+    page: number = 1,
+    limit: number = 20
+  ): Promise<Page<File | Folder>> {
+    const { services } = await this.getServices();
 
+    const offset = (page - 1) * limit;
+
+    // Get root folder if folderId not provided
+    const rootFolder = await services.folder.findOne({ userId, parentId: null });
+    if (!rootFolder) {
+      throw new Error('User root folder not found');
+    }
+    const targetFolderId = folderId ?? rootFolder.id;
+
+    // Fetch both folders and files
+    const [folders, files] = await Promise.all([
+      services.folder.find(
+        { userId, parentId: targetFolderId },
+        { orderBy: { createdAt: 'DESC' } }
+      ),
+      services.file.find(
+        { userId, folderId: targetFolderId },
+        { orderBy: { createdAt: 'DESC' } }
+      )
+    ]);
+
+    // Combine and sort by createdAt
+    const combined = [...folders, ...files].sort((a, b) =>
+      b.createdAt.getTime() - a.createdAt.getTime()
+    );
+
+    // Apply pagination
+    const totalElements = combined.length;
+    const totalPage = Math.ceil(totalElements / limit);
+    const contents = combined.slice(offset, offset + limit);
+
+    return {
+      contents,
+      currentPage: page,
+      perPage: limit,
+      totalPage,
+      totalElements
+    };
+  }
 
 
   async initMultipartUpload(userId: number, objectKey: string, totalChunks: number) {
