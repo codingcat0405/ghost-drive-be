@@ -237,9 +237,11 @@ class FileService {
     const { services } = await this.getServices();
     const offset = (page - 1) * limit;
     const whereClause: any = { userId };
-    if (parentId) {
-      whereClause.parentId = parentId;
+    const rootFolder = await services.folder.findOne({ userId, parentId: null });
+    if (!rootFolder) {
+      throw new Error('User root folder not found');
     }
+    whereClause.parentId = parentId ?? rootFolder.id; // if parentId is not provided, use user root folder
     const findAndCount = await services.folder.findAndCount(whereClause, {
       orderBy: { createdAt: 'DESC' },
       limit,
