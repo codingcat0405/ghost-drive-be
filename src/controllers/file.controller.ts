@@ -139,27 +139,7 @@ const fileController = new Elysia()
           limit: t.Optional(t.String({ description: "Items per page (default: 20)" }))
         })
       })
-      // List contents
-      .get("/contents", async ({ query, user, fileService }) => {
-        return await fileService.listContents(
-          user.id,
-          query.folderId ? parseInt(query.folderId) : undefined,
-          query.page ? parseInt(query.page) : 1,
-          query.limit ? parseInt(query.limit) : 20
-        );
-      }, {
-        checkAuth: ['user'],
-        detail: {
-          tags: ["File"],
-          security: [{ JwtAuth: [] }],
-          description: "List contents of a folder"
-        },
-        query: t.Object({
-          folderId: t.Optional(t.String({ description: "Folder ID" })),
-          page: t.Optional(t.String({ description: "Page number (default: 1)" })),
-          limit: t.Optional(t.String({ description: "Items per page (default: 20)" }))
-        })
-      })
+     
   );
 
 export default fileController;
