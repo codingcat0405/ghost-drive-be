@@ -18,7 +18,7 @@ class UserService {
       throw new Error("User already exists")
     }
     const hashPassword = await Bun.password.hash(password, 'bcrypt')
-    const bucketName = `ghostdrive-${username}`
+    const bucketName = `ghostdrive-${username.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^-|-$/g, '')}`
     await this.minioService.createBucket(bucketName)
     const user = db.user.create({
       username,
