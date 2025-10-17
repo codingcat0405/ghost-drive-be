@@ -85,7 +85,7 @@ const folderController = new Elysia()
       }, {
         checkAuth: ['user'],
         detail: {
-          tags: ["File"],
+          tags: ["Folder"],
           security: [{ JwtAuth: [] }],
           description: "List contents of a folder"
         },
