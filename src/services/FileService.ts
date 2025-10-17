@@ -351,6 +351,26 @@ class FileService {
     return await this.minioService.completeMultipartUpload(bucketName, objectKey, uploadId, parts);
   }
 
+
+  async getFolderParentTree(userId: number, folderId?: number): Promise<Folder[]> {
+    const { services } = await this.getServices();
+    const rootFolder = await services.folder.findOne({ userId, parentId: null });
+    if (!rootFolder) {
+      throw new Error('User root folder not found');
+    }
+    if (!folderId) {
+      //not provided => root folder (has no parent)
+      return []
+    }
+    const parentFolders = [];
+    let currentFolder = await services.folder.findOne({ id: folderId, userId });
+    while (currentFolder) {
+      parentFolders.push(currentFolder);
+      currentFolder = await services.folder.findOne({ id: currentFolder.parentId, userId });
+    }
+    return parentFolders.reverse();
+  }
+
   /**
    * Get database services
    */

@@ -95,6 +95,20 @@ const folderController = new Elysia()
           limit: t.Optional(t.String({ description: "Items per page (default: 20)" }))
         })
       })
+      // Get folder tree
+      .get("/tree", async ({ user, fileService, query }) => {
+        return await fileService.getFolderParentTree(user.id, query.folderId ? parseInt(query.folderId) : undefined);
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["Folder"],
+          security: [{ JwtAuth: [] }],
+          description: "Get folder tree"
+        },
+        query: t.Object({
+          folderId: t.Optional(t.String({ description: "Folder ID" }))
+        })
+      })
   );
 
 export default folderController;
