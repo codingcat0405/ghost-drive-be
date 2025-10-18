@@ -209,8 +209,12 @@ class FileService {
   async updateFolder(folderId: number, userId: number, name: string, parentId?: number): Promise<Folder> {
     const { services } = await this.getServices();
     const folder = await services.folder.findOne({ id: folderId, userId });
+
     if (!folder) {
       throw new Error('Folder not found or not belongs to this user');
+    }
+    if (folder.name === '/') {
+      throw new Error('Cannot edit root folder');
     }
 
     if (parentId) {
@@ -440,6 +444,74 @@ class FileService {
     }
     const childrenFolders = await services.folder.find({ userId, parentId: folderId ?? rootFolder.id }, { orderBy: { createdAt: 'DESC' } });
     return childrenFolders;
+  }
+
+  /**
+   * Get all valid destination folders for moving files/folders
+   * Returns folders with their full paths
+   * - For files: can move to any folder
+   * - For folders: cannot move to their descendants (but can move to parents/siblings)
+   */
+  async getMoveDestinations(
+    userId: number,
+    type: 'file' | 'folder',
+    sourceFolderId?: number
+  ): Promise<Array<Folder & { path: string }>> {
+    const { services } = await this.getServices();
+
+    // Get root folder
+    const rootFolder = await services.folder.findOne({ userId, parentId: null });
+    if (!rootFolder) {
+      throw new Error('User root folder not found');
+    }
+
+    // Get all folders for the user
+    const allFolders = await services.folder.find({ userId });
+
+    let excludedIds: number[] = [];
+
+    if (type === 'folder' && sourceFolderId) {
+      // For folders: exclude the source folder and its descendants
+      const sourceFolder = await services.folder.findOne({ id: sourceFolderId, userId });
+      if (!sourceFolder) {
+        throw new Error('Source folder not found');
+      }
+      // Get all descendants of the source folder
+      const descendants = await this.getAllChildrenFolders(sourceFolderId, userId);
+      excludedIds = [sourceFolderId, ...descendants.map(d => d.id)];
+    }
+    // For files: no exclusions (can move to any folder)
+
+    // Filter out excluded folders and build path for each folder
+    const validDestinations = allFolders
+      .filter(folder => !excludedIds.includes(folder.id))
+      .map(folder => ({
+        ...folder,
+        path: this.buildFolderPath(folder, allFolders)
+      }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+
+    return validDestinations;
+  }
+
+  /**
+   * Build full path for a folder by traversing up the parent chain
+   */
+  private buildFolderPath(folder: Folder, allFolders: Folder[]): string {
+    if (folder.parentId === null) {
+      return '/';
+    }
+
+    const pathParts: string[] = [];
+    let currentFolder = folder;
+
+    // Build path by traversing up the parent chain
+    while (currentFolder && currentFolder.parentId !== null) {
+      pathParts.unshift(currentFolder.name);
+      currentFolder = allFolders.find(f => f.id === currentFolder.parentId)!;
+    }
+
+    return '/' + pathParts.join('/');
   }
 
   /**

@@ -124,6 +124,25 @@ const folderController = new Elysia()
           folderId: t.Optional(t.String({ description: "Folder ID" }))
         })
       })
+      // Get move destinations
+      .get("/move-destinations", async ({ user, fileService, query }) => {
+        return await fileService.getMoveDestinations(
+          user.id,
+          query.type as 'file' | 'folder',
+          query.sourceFolderId ? parseInt(query.sourceFolderId) : undefined
+        );
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["Folder"],
+          security: [{ JwtAuth: [] }],
+          description: "Get valid destination folders for moving files/folders"
+        },
+        query: t.Object({
+          type: t.String({ description: "Type of item being moved: 'file' or 'folder'" }),
+          sourceFolderId: t.Optional(t.String({ description: "Source folder ID to exclude from destinations (only for folders)" }))
+        })
+      })
   );
 
 export default folderController;
