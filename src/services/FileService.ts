@@ -137,7 +137,7 @@ class FileService {
     if (!userRootFolder) {
       throw new Error('User root folder not found');
     }
-    const folder = services.folder.create({ name, userId, parentId: parentId ?? userRootFolder.id }); // if parentId is not provided, use user root folder
+    const folder = services.folder.create({ name, userId, parentId: parentId || userRootFolder.id }); // if parentId is not provided, use user root folder
     await services.em.persistAndFlush(folder);
     return folder;
   }
