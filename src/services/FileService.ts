@@ -390,7 +390,7 @@ class FileService {
     if (!rootFolder) {
       throw new Error('User root folder not found');
     }
-    const childrenFolders = await services.folder.find({ userId, parentId: folderId ?? rootFolder.id });
+    const childrenFolders = await services.folder.find({ userId, parentId: folderId ?? rootFolder.id }, { orderBy: { createdAt: 'DESC' } });
     return childrenFolders;
   }
 
