@@ -97,7 +97,7 @@ const folderController = new Elysia()
         })
       })
       // Get folder tree
-      .get("/tree", async ({ user, fileService, query }) => {
+      .get("/parent-tree", async ({ user, fileService, query }) => {
         return await fileService.getFolderParentTree(user.id, query.folderId ? parseInt(query.folderId) : undefined);
       }, {
         checkAuth: ['user'],
@@ -105,6 +105,20 @@ const folderController = new Elysia()
           tags: ["Folder"],
           security: [{ JwtAuth: [] }],
           description: "Get folder tree"
+        },
+        query: t.Object({
+          folderId: t.Optional(t.String({ description: "Folder ID" }))
+        })
+      })
+      // Get children folders
+      .get("/children", async ({ user, fileService, query }) => {
+        return await fileService.getChildrenFolders(user.id, query.folderId ? parseInt(query.folderId) : undefined);
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["Folder"],
+          security: [{ JwtAuth: [] }],
+          description: "Get children folders"
         },
         query: t.Object({
           folderId: t.Optional(t.String({ description: "Folder ID" }))

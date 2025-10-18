@@ -175,15 +175,15 @@ class FileService {
     if (!folder) {
       throw new Error('Folder not found or not belongs to this user');
     }
-    if(parentId) {
+    if (parentId) {
       const parentFolder = await services.folder.findOne({ id: parentId, userId });
       if (!parentFolder) {
         throw new Error('Parent folder not found or not belongs to this user');
       }
-      if(parentFolder.id === folder.id) {
+      if (parentFolder.id === folder.id) {
         throw new Error('Parent folder cannot be the same as the folder itself');
       }
-      if(parentFolder.parentId === folder.id) {
+      if (parentFolder.parentId === folder.id) {
         throw new Error('Parent folder cannot be the child of the folder itself');
       }
       folder.parentId = parentId;
@@ -382,6 +382,16 @@ class FileService {
       currentFolder = await services.folder.findOne({ id: currentFolder.parentId, userId });
     }
     return parentFolders.reverse();
+  }
+
+  async getChildrenFolders(userId: number, folderId?: number): Promise<Folder[]> {
+    const { services } = await this.getServices();
+    const rootFolder = await services.folder.findOne({ userId, parentId: null });
+    if (!rootFolder) {
+      throw new Error('User root folder not found');
+    }
+    const childrenFolders = await services.folder.find({ userId, parentId: folderId ?? rootFolder.id });
+    return childrenFolders;
   }
 
   /**
