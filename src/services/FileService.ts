@@ -169,24 +169,74 @@ class FileService {
     }
   }
 
+  /**
+   * Check if moving folder to new parent would create circular reference
+   */
+  private async validateParentId(folderId: number, newParentId: number, userId: number): Promise<boolean> {
+    const { services } = await this.getServices();
+
+    // Get all children of the folder we're trying to move
+    const children = await this.getAllChildrenFolders(folderId, userId);
+    const childrenIds = children.map(child => child.id);
+
+    // Check if newParentId is in the children list (would create circular reference)
+    if (childrenIds.includes(newParentId)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Get all children folders recursively
+   */
+  private async getAllChildrenFolders(folderId: number, userId: number): Promise<Folder[]> {
+    const { services } = await this.getServices();
+    const allChildren: Folder[] = [];
+
+    const getChildrenRecursive = async (parentId: number) => {
+      const directChildren = await services.folder.find({ userId, parentId });
+      for (const child of directChildren) {
+        allChildren.push(child);
+        await getChildrenRecursive(child.id);
+      }
+    };
+
+    await getChildrenRecursive(folderId);
+    return allChildren;
+  }
+
   async updateFolder(folderId: number, userId: number, name: string, parentId?: number): Promise<Folder> {
     const { services } = await this.getServices();
     const folder = await services.folder.findOne({ id: folderId, userId });
     if (!folder) {
       throw new Error('Folder not found or not belongs to this user');
     }
+
     if (parentId) {
       const parentFolder = await services.folder.findOne({ id: parentId, userId });
       if (!parentFolder) {
         throw new Error('Parent folder not found or not belongs to this user');
       }
+
       if (parentFolder.id === folder.id) {
         throw new Error('Parent folder cannot be the same as the folder itself');
       }
-      if (parentFolder.parentId === folder.id) {
-        throw new Error('Parent folder cannot be the child of the folder itself');
+
+      // Validate that moving to new parent won't create circular reference
+      const isValidParent = await this.validateParentId(folderId, parentId, userId);
+      if (!isValidParent) {
+        throw new Error('Cannot move folder: would create circular reference');
       }
+
       folder.parentId = parentId;
+    }
+
+    if (name === '/') {
+      throw new Error('Invalid folder name');
+    }
+    if (name.includes('/')) {
+      throw new Error('Folder name cannot contain slashes');
     }
     folder.name = name;
     await services.em.flush();
@@ -246,7 +296,7 @@ class FileService {
     parentId?: number,
     page: number = 1,
     limit: number = 20
-  ): Promise<Page<Folder & { path: string }>> {
+  ): Promise<Page<Folder>> {
     const { services } = await this.getServices();
     const offset = (page - 1) * limit;
     const whereClause: any = { userId };
@@ -258,18 +308,7 @@ class FileService {
       limit,
       offset,
     });
-    //get each item path by getting the parent folders
-    const folderWithPath = [];
-    for (const item of findAndCount[0]) {
-      const parentFolders = await this.getFolderParentTree(userId, item.parentId);
-      
-      let path = parentFolders.map(folder => folder.name === '/' ? '' : folder.name).join('/') + '/' + item.name;
-      if(item.name === '/') {
-        path = '/';
-      }
-      folderWithPath.push({ ...item, path: path });
-    }
-    return toPageDTO([folderWithPath, findAndCount[1]], page, limit);
+    return toPageDTO(findAndCount, page, limit);
   }
 
   /**
