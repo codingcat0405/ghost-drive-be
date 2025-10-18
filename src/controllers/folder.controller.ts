@@ -45,7 +45,7 @@ const folderController = new Elysia()
       })
       // Update folder
       .put("/:folderId", async ({ params, body, user, fileService }) => {
-        return await fileService.updateFolder(parseInt(params.folderId), user.id, body.name);
+        return await fileService.updateFolder(parseInt(params.folderId), user.id, body.name, body.parentId);
       }, {
         checkAuth: ['user'],
         detail: {
@@ -57,7 +57,8 @@ const folderController = new Elysia()
           folderId: t.String({ description: "Folder ID" })
         }),
         body: t.Object({
-          name: t.String({ description: "New folder name" })
+          name: t.String({ description: "New folder name" }),
+          parentId: t.Optional(t.Number({ description: "New parent folder ID" }))
         })
       })
       // Delete folder
