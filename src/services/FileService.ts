@@ -246,7 +246,7 @@ class FileService {
     parentId?: number,
     page: number = 1,
     limit: number = 20
-  ): Promise<Page<Folder>> {
+  ): Promise<Page<Folder & { path: string }>> {
     const { services } = await this.getServices();
     const offset = (page - 1) * limit;
     const whereClause: any = { userId };
@@ -258,7 +258,18 @@ class FileService {
       limit,
       offset,
     });
-    return toPageDTO(findAndCount, page, limit);
+    //get each item path by getting the parent folders
+    const folderWithPath = [];
+    for (const item of findAndCount[0]) {
+      const parentFolders = await this.getFolderParentTree(userId, item.parentId);
+      
+      let path = parentFolders.map(folder => folder.name === '/' ? '' : folder.name).join('/') + '/' + item.name;
+      if(item.name === '/') {
+        path = '/';
+      }
+      folderWithPath.push({ ...item, path: path });
+    }
+    return toPageDTO([folderWithPath, findAndCount[1]], page, limit);
   }
 
   /**
