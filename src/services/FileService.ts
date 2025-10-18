@@ -263,6 +263,11 @@ class FileService {
     for (const file of files) {
       await this.deleteFile(file.id, userId);
     }
+    //find all children folders and delete them
+    const childrenFolders = await this.getAllChildrenFolders(folderId, userId);
+    for (const childFolder of childrenFolders) {
+      await this.deleteFolder(childFolder.id, userId);
+    }
     await services.em.removeAndFlush(folder);
     return true;
   }
