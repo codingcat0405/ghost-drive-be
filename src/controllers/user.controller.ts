@@ -96,6 +96,22 @@ const userController = new Elysia()
         })
       })
 
+      .put("/update-password", async ({ user, body }) => {
+        return await userService.updatePassword(user, body.oldPassword, body.newPassword)
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["User"],
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+        body: t.Object({
+          oldPassword: t.String(),
+          newPassword: t.String()
+        })
+      })
+
   )
 
 export default userController

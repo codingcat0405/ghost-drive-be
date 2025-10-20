@@ -183,8 +183,8 @@ class UserService {
       bucketName: userInDb.bucketName,
       avatar: userInDb.avatar,
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
-
-      fullN
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 
