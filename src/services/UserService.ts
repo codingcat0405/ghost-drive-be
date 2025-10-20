@@ -139,5 +139,30 @@ class UserService {
   }
 
 
+  async updatePassword(user: User, oldPassword: string, newPassword: string) {
+    const db = await initORM()
+    const userInDb = await db.user.findOne({ id: user.id })
+    if (!userInDb) {
+      throw new Error("User not found")
+    }
+    const isValid = await Bun.password.verify(oldPassword, userInDb.password, 'bcrypt')
+    if (!isValid) {
+      throw new Error("Invalid password")
+    }
+    const hashPassword = await Bun.password.hash(newPassword, 'bcrypt')
+    userInDb.password = hashPassword
+    await db.em.persistAndFlush(userInDb)
+    return {
+      id: userInDb.id,
+      username: userInDb.username,
+      role: userInDb.role,
+      bucketName: userInDb.bucketName,
+      avatar: userInDb.avatar,
+      aesKeyEncrypted: userInDb.aesKeyEncrypted,
+
+      fullN
+    }
+  }
+
 }
 export default UserService;
