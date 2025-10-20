@@ -2,12 +2,14 @@ import {EntityManager, EntityRepository, MikroORM, Options} from "@mikro-orm/pos
 import {User} from "./entities/User";
 import {File} from "./entities/File";
 import config from './mikro-orm.config'
+import { Folder } from "./entities/Folder";
 
 export interface Services {
   orm: MikroORM;
   em: EntityManager;
   user: EntityRepository<User>;
   file: EntityRepository<File>;
+  folder: EntityRepository<Folder>;
 }
 
 let dataSource: Services;
@@ -27,6 +29,7 @@ export async function initORM(options?: Options): Promise<Services> {
     em: orm.em,
     user: orm.em.getRepository(User),
     file: orm.em.getRepository(File),
+    folder: orm.em.getRepository(Folder),
   };
   return dataSource;
 }

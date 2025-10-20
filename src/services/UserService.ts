@@ -18,7 +18,7 @@ class UserService {
       throw new Error("User already exists")
     }
     const hashPassword = await Bun.password.hash(password, 'bcrypt')
-    const bucketName = `ghostdrive-${username}`
+    const bucketName = `ghostdrive-${username.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^-|-$/g, '')}`
     await this.minioService.createBucket(bucketName)
     const user = db.user.create({
       username,
@@ -27,6 +27,12 @@ class UserService {
       bucketName
     })
     await db.em.persistAndFlush(user)
+    //create root folder for user
+    const rootFolder = db.folder.create({
+      name: "/",
+      userId: user.id
+    })
+    await db.em.persistAndFlush(rootFolder)
     return {
       id: user.id,
       username: user.username,
@@ -54,7 +60,11 @@ class UserService {
         id: Number(user.id),
         username: user.username,
         role: user.role,
-        bucketName: user.bucketName
+        bucketName: user.bucketName,
+        aesKeyEncrypted: user.aesKeyEncrypted,
+        avatar: user.avatar,
+        fullName: user.fullName,
+        email: user.email
       },
       jwt: token
     }
@@ -72,7 +82,9 @@ class UserService {
       role: userInDb.role,
       bucketName: userInDb.bucketName,
       avatar: userInDb.avatar,
-      aesKeyEncrypted: userInDb.aesKeyEncrypted
+      aesKeyEncrypted: userInDb.aesKeyEncrypted,
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 
@@ -90,7 +102,9 @@ class UserService {
       role: userInDb.role,
       bucketName: userInDb.bucketName,
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
-      avatar: userInDb.avatar
+      avatar: userInDb.avatar,
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 
@@ -117,24 +131,34 @@ class UserService {
       role: userInDb.role,
       bucketName: userInDb.bucketName,
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
-      avatar: userInDb.avatar
+      avatar: userInDb.avatar,
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 
-  async updateAvatar(user: User, avatar: string) {
+  async updateUser(user: User, body: {
+    avatar?: string,
+    fullName?: string,
+    email?: string
+  }) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
       throw new Error("User not found")
     }
-    userInDb.avatar = avatar
+    if (body.avatar) userInDb.avatar = body.avatar
+    if (body.fullName) userInDb.fullName = body.fullName
+    if (body.email) userInDb.email = body.email
     await db.em.persistAndFlush(userInDb)
     return {
       id: userInDb.id,
       username: userInDb.username,
       role: userInDb.role,
       bucketName: userInDb.bucketName,
-      avatar: userInDb.avatar
+      avatar: userInDb.avatar,
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 

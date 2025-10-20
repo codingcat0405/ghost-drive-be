@@ -79,8 +79,8 @@ const userController = new Elysia()
           aesKeyEncrypted: t.String(),
         })
       })
-      .post("/update-avatar", async ({ user, body }) => {
-        return await userService.updateAvatar(user, body.avatar)
+      .put("/", async ({ user, body }) => {
+        return await userService.updateUser(user, body)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -90,7 +90,9 @@ const userController = new Elysia()
           ],
         },
         body: t.Object({
-          avatar: t.String(),
+          avatar: t.Optional(t.String()),
+          fullName: t.Optional(t.String()),
+          email: t.Optional(t.String())
         })
       })
 

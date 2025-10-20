@@ -14,11 +14,8 @@ export class File extends BaseEntity {
   objectKey!: string; // this is the key of the file in the s3 bucket
 
   @Property({
-    "default": "/"
+    type: "bigint",
   })
-  path!: string; // this is the path of the file in frontend allow user to organize files via folders(directories)
-
-  @Property()
   size!: number; //size in bytes can be use in future for user quotation and billing
 
   @Property({
@@ -28,5 +25,10 @@ export class File extends BaseEntity {
 
   @Property()
   userId!: number;
+
+  @Property({
+    default: 0,
+  })
+  folderId!: number;
 
 }
