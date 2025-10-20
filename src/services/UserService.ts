@@ -62,7 +62,9 @@ class UserService {
         role: user.role,
         bucketName: user.bucketName,
         aesKeyEncrypted: user.aesKeyEncrypted,
-        avatar: user.avatar
+        avatar: user.avatar,
+        fullName: user.fullName,
+        email: user.email
       },
       jwt: token
     }
@@ -80,7 +82,9 @@ class UserService {
       role: userInDb.role,
       bucketName: userInDb.bucketName,
       avatar: userInDb.avatar,
-      aesKeyEncrypted: userInDb.aesKeyEncrypted
+      aesKeyEncrypted: userInDb.aesKeyEncrypted,
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 
@@ -98,7 +102,9 @@ class UserService {
       role: userInDb.role,
       bucketName: userInDb.bucketName,
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
-      avatar: userInDb.avatar
+      avatar: userInDb.avatar,
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 
@@ -125,24 +131,34 @@ class UserService {
       role: userInDb.role,
       bucketName: userInDb.bucketName,
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
-      avatar: userInDb.avatar
+      avatar: userInDb.avatar,
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 
-  async updateAvatar(user: User, avatar: string) {
+  async updateUser(user: User, body: {
+    avatar?: string,
+    fullName?: string,
+    email?: string
+  }) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
       throw new Error("User not found")
     }
-    userInDb.avatar = avatar
+    if (body.avatar) userInDb.avatar = body.avatar
+    if (body.fullName) userInDb.fullName = body.fullName
+    if (body.email) userInDb.email = body.email
     await db.em.persistAndFlush(userInDb)
     return {
       id: userInDb.id,
       username: userInDb.username,
       role: userInDb.role,
       bucketName: userInDb.bucketName,
-      avatar: userInDb.avatar
+      avatar: userInDb.avatar,
+      fullName: userInDb.fullName,
+      email: userInDb.email
     }
   }
 
