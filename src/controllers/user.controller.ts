@@ -111,7 +111,17 @@ const userController = new Elysia()
           newPassword: t.String()
         })
       })
-
+      .get("/report", async ({ user }) => {
+        return await userService.getReport(user)
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["User"],
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+      })
   )
 
 export default userController

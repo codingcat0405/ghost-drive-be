@@ -39,6 +39,12 @@ export class User extends BaseEntity {
   })
   bucketName!: string;
 
+  @Property({
+    default: 1024 * 1024 * 1024, // 1GB
+    type: "bigint",
+  })
+  storageQuota?: number; // in bytes
+
 
   @Property()
   role!: string;

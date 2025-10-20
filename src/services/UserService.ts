@@ -2,7 +2,7 @@ import { User } from './../entities/User';
 import { initORM } from "../db";
 import jwt from "jsonwebtoken";
 import MinioService from "./MinioService";
-import { wrap } from '@mikro-orm/core';
+import { File } from '../entities/File';
 
 class UserService {
   private readonly minioService: MinioService;
@@ -38,7 +38,8 @@ class UserService {
       username: user.username,
       role: user.role,
       bucketName: user.bucketName,
-      avatar: user.avatar
+      avatar: user.avatar,
+      storageQuota: user.storageQuota
     }
   }
 
@@ -64,7 +65,8 @@ class UserService {
         aesKeyEncrypted: user.aesKeyEncrypted,
         avatar: user.avatar,
         fullName: user.fullName,
-        email: user.email
+        email: user.email,
+        storageQuota: user.storageQuota
       },
       jwt: token
     }
@@ -84,7 +86,8 @@ class UserService {
       avatar: userInDb.avatar,
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
       fullName: userInDb.fullName,
-      email: userInDb.email
+      email: userInDb.email,
+      storageQuota: userInDb.storageQuota
     }
   }
 
@@ -104,7 +107,8 @@ class UserService {
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
       avatar: userInDb.avatar,
       fullName: userInDb.fullName,
-      email: userInDb.email
+      email: userInDb.email,
+      storageQuota: userInDb.storageQuota
     }
   }
 
@@ -133,7 +137,8 @@ class UserService {
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
       avatar: userInDb.avatar,
       fullName: userInDb.fullName,
-      email: userInDb.email
+      email: userInDb.email,
+      storageQuota: userInDb.storageQuota
     }
   }
 
@@ -158,7 +163,8 @@ class UserService {
       bucketName: userInDb.bucketName,
       avatar: userInDb.avatar,
       fullName: userInDb.fullName,
-      email: userInDb.email
+      email: userInDb.email,
+      storageQuota: userInDb.storageQuota
     }
   }
 
@@ -184,7 +190,48 @@ class UserService {
       avatar: userInDb.avatar,
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
       fullName: userInDb.fullName,
-      email: userInDb.email
+      email: userInDb.email,
+      storageQuota: userInDb.storageQuota
+    }
+  }
+
+  async getReport(user: User) {
+    const db = await initORM()
+    const userInDb = await db.user.findOne({ id: user.id })
+    if (!userInDb) {
+      throw new Error("User not found")
+    }
+
+    const totalStorageQueryResult = await db.em.execute<{ total: string }[]>(
+      'SELECT sum(size) as total FROM file WHERE user_id = ?',
+      [user.id]
+    );
+    const totalStorage = totalStorageQueryResult[0].total ? parseInt(totalStorageQueryResult[0].total) : 0;
+    const totalStorageImageQueryResult = await db.em.execute<{ total: string }[]>(
+      'SELECT sum(size) as total FROM file WHERE user_id = ? AND mime_type ILIKE ?',
+      [user.id, 'image/%']
+    );
+    const totalStorageImage = totalStorageImageQueryResult[0].total ? parseInt(totalStorageImageQueryResult[0].total) : 0;
+    const totalStorageVideoQueryResult = await db.em.execute<{ total: string }[]>(
+      'SELECT sum(size) as total FROM file WHERE user_id = ? AND mime_type ILIKE ?',
+      [user.id, 'video/%']
+    );
+    const totalStorageVideo = totalStorageVideoQueryResult[0].total ? parseInt(totalStorageVideoQueryResult[0].total) : 0;
+    const totalStorageAudioQueryResult = await db.em.execute<{ total: string }[]>(
+      'SELECT sum(size) as total FROM file WHERE user_id = ? AND mime_type ILIKE ?',
+      [user.id, 'audio/%']
+    );
+    const totalStorageAudio = totalStorageAudioQueryResult[0].total ? parseInt(totalStorageAudioQueryResult[0].total) : 0;
+
+    const otherStorage = totalStorage - totalStorageImage - totalStorageVideo - totalStorageAudio;
+
+    return {
+      totalStorage,
+      storageQuota: userInDb.storageQuota,
+      totalStorageImage,
+      totalStorageVideo,
+      totalStorageAudio,
+      otherStorage
     }
   }
 
