@@ -248,17 +248,6 @@ class UserService {
     }
   }
 
-  async updateAvatar(user: User, avatar: string) {
-    const db = await initORM()
-    const userInDb = await db.user.findOne({ id: user.id })
-    if (!userInDb) {
-      throw new Error("User not found")
-    }
-    userInDb.avatar = avatar
-    await db.em.persistAndFlush(userInDb)
-    return userInDb
-  }
-
   async updatePassword(user: User, oldPassword: string, newPassword: string) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })

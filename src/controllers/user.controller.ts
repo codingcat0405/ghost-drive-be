@@ -112,22 +112,6 @@ const userController = new Elysia()
           email: t.Optional(t.String())
         })
       })
-      .post("/update-avatar", async ({ user, body }) => {
-        return await userService.updateAvatar(user, body.avatar ?? "")
-      }, {
-        checkAuth: ['user'],
-        detail: {
-          tags: ["User"],
-          security: [
-            { JwtAuth: [] }
-          ],
-        },
-        body: t.Object({
-          avatar: t.Optional(t.String()),
-          fullName: t.Optional(t.String()),
-          email: t.Optional(t.String())
-        })
-      })
       .post("/2fa/setup", async ({ user }) => {
         return await twoFactorService.setup2FA(user.id)
       }, {
