@@ -33,7 +33,7 @@ const userController = new Elysia()
           password: t.String(),
         })
       })
-      .post("/verify-2fa", async ({ body }) => {
+      .post("/2fa/verify", async ({ body }) => {
         return await userService.verify2FA(body.username, body.token)
       }, {
         detail: {
