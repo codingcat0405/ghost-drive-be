@@ -1,14 +1,17 @@
-import { User } from './../entities/User';
+import { User } from '../entities/User';
 import { initORM } from "../db";
 import jwt from "jsonwebtoken";
 import MinioService from "./MinioService";
-import { File } from '../entities/File';
+import TwoFactorService from "./TwoFactorService";
+import { AuthUser } from "../interfaces/index";
 
 class UserService {
   private readonly minioService: MinioService;
+  private readonly twoFactorService: TwoFactorService;
 
   constructor() {
     this.minioService = new MinioService();
+    this.twoFactorService = new TwoFactorService();
   }
 
   async register(username: string, password: string) {
@@ -24,7 +27,8 @@ class UserService {
       username,
       password: hashPassword,
       role: "user",
-      bucketName
+      bucketName,
+      twoFactorEnabled: false
     })
     await db.em.persistAndFlush(user)
     //create root folder for user
@@ -43,7 +47,7 @@ class UserService {
     }
   }
 
-  async login(username: string, password: string) {
+  async login(username: string, password: string, twoFactorToken?: string) {
     const db = await initORM()
     const user = await db.user.findOne({ username })
     if (!user) {
@@ -53,6 +57,26 @@ class UserService {
     if (!isValid) {
       throw new Error("Invalid password")
     }
+
+    // Check if 2FA is enabled
+    if (user.twoFactorEnabled) {
+      if (!twoFactorToken) {
+        return {
+          requiresTwoFactor: true,
+          message: "2FA token required"
+        }
+      }
+
+      if (!user.twoFactorSecret) {
+        throw new Error("2FA is enabled but no secret found")
+      }
+
+      const is2FAValid = this.twoFactorService.verifyToken(twoFactorToken, user.twoFactorSecret)
+      if (!is2FAValid) {
+        throw new Error("Invalid 2FA token")
+      }
+    }
+
     //generate token
     const token = jwt.sign({ id: Number(user.id), role: user.role }, process.env.JWT_SECRET ?? "")
 
@@ -66,13 +90,14 @@ class UserService {
         avatar: user.avatar,
         fullName: user.fullName,
         email: user.email,
-        storageQuota: user.storageQuota
+        storageQuota: user.storageQuota,
+        twoFactorEnabled: user.twoFactorEnabled
       },
       jwt: token
     }
   }
 
-  async getUserDetail(user: User) {
+  async getUserDetail(user: AuthUser) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -87,11 +112,12 @@ class UserService {
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
       fullName: userInDb.fullName,
       email: userInDb.email,
-      storageQuota: userInDb.storageQuota
+      storageQuota: userInDb.storageQuota,
+      twoFactorEnabled: userInDb.twoFactorEnabled
     }
   }
 
-  async uploadAESKeyEncrypted(user: User, aesKeyEncrypted: string) {
+  async uploadAESKeyEncrypted(user: AuthUser, aesKeyEncrypted: string) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -112,7 +138,7 @@ class UserService {
     }
   }
 
-  async getAESKeyEncrypted(user: User) {
+  async getAESKeyEncrypted(user: AuthUser) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -121,7 +147,7 @@ class UserService {
     return userInDb.aesKeyEncrypted
   }
 
-  async updateAESKeyEncrypted(user: User, aesKeyEncrypted: string) {
+  async updateAESKeyEncrypted(user: AuthUser, aesKeyEncrypted: string) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -139,10 +165,10 @@ class UserService {
       fullName: userInDb.fullName,
       email: userInDb.email,
       storageQuota: userInDb.storageQuota
-    }
-  }
+     }
+   }
 
-  async updateUser(user: User, body: {
+  async updateUser(user: AuthUser, body: {
     avatar?: string,
     fullName?: string,
     email?: string
@@ -168,8 +194,18 @@ class UserService {
     }
   }
 
+  async updateAvatar(user: AuthUser, avatar: string) {
+    const db = await initORM()
+    const userInDb = await db.user.findOne({ id: user.id })
+    if (!userInDb) {
+      throw new Error("User not found")
+    }
+    userInDb.avatar = avatar
+    await db.em.persistAndFlush(userInDb)
+    return userInDb
+  }
 
-  async updatePassword(user: User, oldPassword: string, newPassword: string) {
+  async updatePassword(user: AuthUser, oldPassword: string, newPassword: string) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -195,7 +231,7 @@ class UserService {
     }
   }
 
-  async getReport(user: User) {
+  async getReport(user: AuthUser) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {

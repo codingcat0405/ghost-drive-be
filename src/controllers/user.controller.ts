@@ -1,8 +1,11 @@
 import { Elysia, t } from "elysia";
 import authMacro from "../macros/auth";
 import UserService from "../services/UserService";
+import TwoFactorService from "../services/TwoFactorService";
+import type { AuthUser } from "../interfaces/auth";
 
 const userService = new UserService();
+const twoFactorService = new TwoFactorService();
 const userController = new Elysia()
   .group("/users", group =>
     group
@@ -19,7 +22,7 @@ const userController = new Elysia()
         })
       })
       .post("/login", async ({ body }) => {
-        return await userService.login(body.username, body.password)
+        return await userService.login(body.username, body.password, body.twoFactorToken)
       }, {
         detail: {
           tags: ["User"],
@@ -27,10 +30,11 @@ const userController = new Elysia()
         body: t.Object({
           username: t.String(),
           password: t.String(),
+          twoFactorToken: t.Optional(t.String()),
         })
       })
       .get("/me", async ({ user }) => {
-        return await userService.getUserDetail(user)
+        return await userService.getUserDetail(user as AuthUser)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -41,7 +45,7 @@ const userController = new Elysia()
         },
       })
       .post("/upload-aes-key-encrypted", async ({ user, body }) => {
-        return await userService.uploadAESKeyEncrypted(user, body.aesKeyEncrypted)
+        return await userService.uploadAESKeyEncrypted(user as AuthUser, body.aesKeyEncrypted)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -55,7 +59,7 @@ const userController = new Elysia()
         })
       })
       .get("/get-aes-key-encrypted", async ({ user }) => {
-        return await userService.getAESKeyEncrypted(user)
+        return await userService.getAESKeyEncrypted(user as AuthUser)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -66,7 +70,7 @@ const userController = new Elysia()
         },
       })
       .post("/update-aes-key-encrypted", async ({ user, body }) => {
-        return await userService.updateAESKeyEncrypted(user, body.aesKeyEncrypted)
+        return await userService.updateAESKeyEncrypted(user as AuthUser, body.aesKeyEncrypted)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -80,7 +84,7 @@ const userController = new Elysia()
         })
       })
       .put("/", async ({ user, body }) => {
-        return await userService.updateUser(user, body)
+        return await userService.updateUser(user as AuthUser, body)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -95,9 +99,85 @@ const userController = new Elysia()
           email: t.Optional(t.String())
         })
       })
+      .post("/update-avatar", async ({ user, body }) => {
+        return await userService.updateAvatar(user as AuthUser, body.avatar ?? "")
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["User"],
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+        body: t.Object({
+          avatar: t.Optional(t.String()),
+          fullName: t.Optional(t.String()),
+          email: t.Optional(t.String())
+        })
+      })
+      .post("/2fa/setup", async ({ user }) => {
+        return await twoFactorService.setup2FA(user.id)
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["2FA"],
+          summary: "Setup 2FA for user",
+          description: "Generate 2FA secret and QR code for user to scan",
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+      })
+      .post("/2fa/enable", async ({ user, body }) => {
+        const success = await twoFactorService.enable2FA(user.id, body.token)
+        if (!success) {
+          throw new Error("Invalid 2FA token")
+        }
+        return { message: "2FA enabled successfully" }
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["2FA"],
+          summary: "Enable 2FA for user",
+          description: "Enable 2FA after verifying the token from authenticator app",
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+        body: t.Object({
+          token: t.String(),
+        })
+      })
+      .post("/2fa/disable", async ({ user }) => {
+        await twoFactorService.disable2FA(user.id)
+        return { message: "2FA disabled successfully" }
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["2FA"],
+          summary: "Disable 2FA for user",
+          description: "Disable 2FA and remove secret",
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+      })
+      .get("/2fa/status", async ({ user }) => {
+        return await twoFactorService.get2FAStatus(user.id)
+      }, {
+        checkAuth: ['user'],
+        detail: {
+          tags: ["2FA"],
+          summary: "Get 2FA status",
+          description: "Check if 2FA is enabled for the user",
+          security: [
+            { JwtAuth: [] }
+          ],
+        },
+      })
 
       .put("/update-password", async ({ user, body }) => {
-        return await userService.updatePassword(user, body.oldPassword, body.newPassword)
+        return await userService.updatePassword(user as AuthUser, body.oldPassword, body.newPassword)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -112,7 +192,7 @@ const userController = new Elysia()
         })
       })
       .get("/report", async ({ user }) => {
-        return await userService.getReport(user)
+        return await userService.getReport(user as AuthUser)
       }, {
         checkAuth: ['user'],
         detail: {

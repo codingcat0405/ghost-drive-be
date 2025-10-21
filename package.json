@@ -16,8 +16,11 @@
     "@mikro-orm/core": "^6.4.5",
     "@mikro-orm/postgresql": "^6.4.5",
     "elysia": "1.3.20",
+    "@types/qrcode": "^1.5.5",
     "jsonwebtoken": "^9.0.2",
-    "minio": "^8.0.5"
+    "minio": "^8.0.5",
+    "otplib": "^12.0.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.8",
