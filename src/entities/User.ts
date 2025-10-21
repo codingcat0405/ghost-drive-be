@@ -58,4 +58,9 @@ export class User extends BaseEntity {
     default: false,
   })
   twoFactorEnabled!: boolean;
+
+  @Property({
+    nullable: true,
+  })
+  twoFactorLoginAttemptAt?: Date;
 }

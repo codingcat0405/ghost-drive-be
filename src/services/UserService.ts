@@ -2,16 +2,13 @@ import { User } from '../entities/User';
 import { initORM } from "../db";
 import jwt from "jsonwebtoken";
 import MinioService from "./MinioService";
-import TwoFactorService from "./TwoFactorService";
-import { AuthUser } from "../interfaces/index";
+import { authenticator } from 'otplib';
 
 class UserService {
   private readonly minioService: MinioService;
-  private readonly twoFactorService: TwoFactorService;
 
   constructor() {
     this.minioService = new MinioService();
-    this.twoFactorService = new TwoFactorService();
   }
 
   async register(username: string, password: string) {
@@ -47,7 +44,7 @@ class UserService {
     }
   }
 
-  async login(username: string, password: string, twoFactorToken?: string) {
+  async login(username: string, password: string) {
     const db = await initORM()
     const user = await db.user.findOne({ username })
     if (!user) {
@@ -60,24 +57,81 @@ class UserService {
 
     // Check if 2FA is enabled
     if (user.twoFactorEnabled) {
-      if (!twoFactorToken) {
-        return {
-          requiresTwoFactor: true,
-          message: "2FA token required"
-        }
-      }
+      // Set timestamp for 2FA login attempt
+      user.twoFactorLoginAttemptAt = new Date();
+      await db.em.persistAndFlush(user);
 
-      if (!user.twoFactorSecret) {
-        throw new Error("2FA is enabled but no secret found")
-      }
-
-      const is2FAValid = this.twoFactorService.verifyToken(twoFactorToken, user.twoFactorSecret)
-      if (!is2FAValid) {
-        throw new Error("Invalid 2FA token")
+      return {
+        requiresTwoFactor: true,
+        message: "2FA verification required. Please provide your 2FA token."
       }
     }
 
-    //generate token
+    //generate token for non-2FA users
+    const token = jwt.sign({ id: Number(user.id), role: user.role }, process.env.JWT_SECRET ?? "")
+
+    return {
+      requiresTwoFactor: false,
+      user: {
+        id: Number(user.id),
+        username: user.username,
+        role: user.role,
+        bucketName: user.bucketName,
+        aesKeyEncrypted: user.aesKeyEncrypted,
+        avatar: user.avatar,
+        fullName: user.fullName,
+        email: user.email,
+        storageQuota: user.storageQuota,
+        twoFactorEnabled: user.twoFactorEnabled
+      },
+      jwt: token
+    }
+  }
+
+  async verify2FA(username: string, twoFactorToken: string) {
+    const db = await initORM()
+    const user = await db.user.findOne({ username })
+    if (!user) {
+      throw new Error("User not found")
+    }
+
+    // Verify 2FA is enabled
+    if (!user.twoFactorEnabled) {
+      throw new Error("2FA is not enabled for this user")
+    }
+
+    if (!user.twoFactorSecret) {
+      throw new Error("2FA is enabled but no secret found")
+    }
+
+    // Check if login attempt timestamp exists
+    if (!user.twoFactorLoginAttemptAt) {
+      throw new Error("No recent login attempt found. Please login first.")
+    }
+
+    // Verify the timestamp is within 1 minute (60 seconds)
+    const now = new Date();
+    const attemptTime = new Date(user.twoFactorLoginAttemptAt);
+    const timeDifferenceInSeconds = (now.getTime() - attemptTime.getTime()) / 1000;
+
+    if (timeDifferenceInSeconds > 60) {
+      // Clear the expired timestamp
+      user.twoFactorLoginAttemptAt = undefined;
+      await db.em.persistAndFlush(user);
+      throw new Error("2FA verification timeout. Please login again.")
+    }
+
+    // Verify the 2FA token
+    const is2FAValid = authenticator.check(twoFactorToken, user.twoFactorSecret)
+    if (!is2FAValid) {
+      throw new Error("Invalid 2FA token")
+    }
+
+    // Clear the login attempt timestamp after successful verification
+    user.twoFactorLoginAttemptAt = undefined;
+    await db.em.persistAndFlush(user);
+
+    // Generate JWT token after successful 2FA verification
     const token = jwt.sign({ id: Number(user.id), role: user.role }, process.env.JWT_SECRET ?? "")
 
     return {
@@ -97,7 +151,7 @@ class UserService {
     }
   }
 
-  async getUserDetail(user: AuthUser) {
+  async getUserDetail(user: User) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -117,7 +171,7 @@ class UserService {
     }
   }
 
-  async uploadAESKeyEncrypted(user: AuthUser, aesKeyEncrypted: string) {
+  async uploadAESKeyEncrypted(user: User, aesKeyEncrypted: string) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -138,7 +192,7 @@ class UserService {
     }
   }
 
-  async getAESKeyEncrypted(user: AuthUser) {
+  async getAESKeyEncrypted(user: User) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -147,7 +201,7 @@ class UserService {
     return userInDb.aesKeyEncrypted
   }
 
-  async updateAESKeyEncrypted(user: AuthUser, aesKeyEncrypted: string) {
+  async updateAESKeyEncrypted(user: User, aesKeyEncrypted: string) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -168,7 +222,7 @@ class UserService {
      }
    }
 
-  async updateUser(user: AuthUser, body: {
+  async updateUser(user: User, body: {
     avatar?: string,
     fullName?: string,
     email?: string
@@ -194,7 +248,7 @@ class UserService {
     }
   }
 
-  async updateAvatar(user: AuthUser, avatar: string) {
+  async updateAvatar(user: User, avatar: string) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -205,7 +259,7 @@ class UserService {
     return userInDb
   }
 
-  async updatePassword(user: AuthUser, oldPassword: string, newPassword: string) {
+  async updatePassword(user: User, oldPassword: string, newPassword: string) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {
@@ -231,7 +285,7 @@ class UserService {
     }
   }
 
-  async getReport(user: AuthUser) {
+  async getReport(user: User) {
     const db = await initORM()
     const userInDb = await db.user.findOne({ id: user.id })
     if (!userInDb) {

@@ -2,7 +2,6 @@ import { Elysia, t } from "elysia";
 import authMacro from "../macros/auth";
 import UserService from "../services/UserService";
 import TwoFactorService from "../services/TwoFactorService";
-import type { AuthUser } from "../interfaces/auth";
 
 const userService = new UserService();
 const twoFactorService = new TwoFactorService();
@@ -22,19 +21,33 @@ const userController = new Elysia()
         })
       })
       .post("/login", async ({ body }) => {
-        return await userService.login(body.username, body.password, body.twoFactorToken)
+        return await userService.login(body.username, body.password)
       }, {
         detail: {
           tags: ["User"],
+          summary: "Login with username and password",
+          description: "Authenticate user credentials. Returns requiresTwoFactor=true if 2FA is enabled, otherwise returns JWT token."
         },
         body: t.Object({
           username: t.String(),
           password: t.String(),
-          twoFactorToken: t.Optional(t.String()),
+        })
+      })
+      .post("/verify-2fa", async ({ body }) => {
+        return await userService.verify2FA(body.username, body.token)
+      }, {
+        detail: {
+          tags: ["2FA"],
+          summary: "Verify 2FA token and complete login",
+          description: "Verify the 2FA token for users with 2FA enabled. Returns JWT token upon successful verification."
+        },
+        body: t.Object({
+          username: t.String(),
+          token: t.String(),
         })
       })
       .get("/me", async ({ user }) => {
-        return await userService.getUserDetail(user as AuthUser)
+        return await userService.getUserDetail(user)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -45,7 +58,7 @@ const userController = new Elysia()
         },
       })
       .post("/upload-aes-key-encrypted", async ({ user, body }) => {
-        return await userService.uploadAESKeyEncrypted(user as AuthUser, body.aesKeyEncrypted)
+        return await userService.uploadAESKeyEncrypted(user, body.aesKeyEncrypted)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -59,7 +72,7 @@ const userController = new Elysia()
         })
       })
       .get("/get-aes-key-encrypted", async ({ user }) => {
-        return await userService.getAESKeyEncrypted(user as AuthUser)
+        return await userService.getAESKeyEncrypted(user)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -70,7 +83,7 @@ const userController = new Elysia()
         },
       })
       .post("/update-aes-key-encrypted", async ({ user, body }) => {
-        return await userService.updateAESKeyEncrypted(user as AuthUser, body.aesKeyEncrypted)
+        return await userService.updateAESKeyEncrypted(user, body.aesKeyEncrypted)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -84,7 +97,7 @@ const userController = new Elysia()
         })
       })
       .put("/", async ({ user, body }) => {
-        return await userService.updateUser(user as AuthUser, body)
+        return await userService.updateUser(user, body)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -100,7 +113,7 @@ const userController = new Elysia()
         })
       })
       .post("/update-avatar", async ({ user, body }) => {
-        return await userService.updateAvatar(user as AuthUser, body.avatar ?? "")
+        return await userService.updateAvatar(user, body.avatar ?? "")
       }, {
         checkAuth: ['user'],
         detail: {
@@ -177,7 +190,7 @@ const userController = new Elysia()
       })
 
       .put("/update-password", async ({ user, body }) => {
-        return await userService.updatePassword(user as AuthUser, body.oldPassword, body.newPassword)
+        return await userService.updatePassword(user, body.oldPassword, body.newPassword)
       }, {
         checkAuth: ['user'],
         detail: {
@@ -192,7 +205,7 @@ const userController = new Elysia()
         })
       })
       .get("/report", async ({ user }) => {
-        return await userService.getReport(user as AuthUser)
+        return await userService.getReport(user)
       }, {
         checkAuth: ['user'],
         detail: {
