@@ -29,7 +29,20 @@ class FileService {
    * Get presigned URL for file upload (uses user's bucket)
    */
   async getUploadPresignedUrl(objectKey: string, userId: number): Promise<string> {
-    const bucketName = await this.getUserBucketName(userId);
+    const { services } = await this.getServices();
+    const user = await services.user.findOne({ id: userId });
+    if (!user) {
+      throw new Error('User not found');
+    }
+    const file = await services.file.findOne({ objectKey, userId });
+    if (!file) {
+      throw new Error('File not found or not belongs to this user');
+    }
+    const totalStorageUsed = await this.getCurrentUserUsage(userId);
+    if (totalStorageUsed + file.size >= (user.storageQuota ?? 0)) {
+      throw new Error('User storage quota exceeded');
+    }
+    const bucketName = user.bucketName;
     return await this.minioService.getUploadPresignedUrl(bucketName, objectKey);
   }
 
@@ -73,6 +86,14 @@ class FileService {
     const userRootFolder = await services.folder.findOne({ userId, name: '/' });
     if (!userRootFolder) {
       throw new Error('User root folder not found');
+    }
+    const user = await services.user.findOne({ id: userId });
+    if (!user) {
+      throw new Error('User not found');
+    }
+    const totalStorageUsed = await this.getCurrentUserUsage(userId);
+    if (totalStorageUsed + size > (user.storageQuota ?? 0)) {
+      throw new Error('User storage quota exceeded');
     }
     const file = services.file.create({
       name,
@@ -403,6 +424,14 @@ class FileService {
     if (!user) {
       throw new Error('User not found');
     }
+    const totalStorageUsed = await this.getCurrentUserUsage(userId);
+    const file = await services.file.findOne({ objectKey, userId });
+    if (!file) {
+      throw new Error('File not found or not belongs to this user');
+    }
+    if (totalStorageUsed + file.size >= (user.storageQuota ?? 0)) {
+      throw new Error('User storage quota exceeded');
+    }
     const bucketName = user.bucketName;
     const fileId = crypto.randomUUID();
     return await this.minioService.initMultipartUpload(bucketName, fileId, objectKey, totalChunks);
@@ -519,6 +548,14 @@ class FileService {
     return '/' + pathParts.join('/');
   }
 
+  private async getCurrentUserUsage(userId: number): Promise<number> {
+    const { services } = await this.getServices();
+    const totalStorageQueryResult = await services.em.execute<{ total: string }[]>(
+      'SELECT sum(size) as total FROM file WHERE user_id = ?',
+      [userId]
+    );
+    return totalStorageQueryResult[0].total ? parseInt(totalStorageQueryResult[0].total) : 0;
+  }
   /**
    * Get database services
    */
