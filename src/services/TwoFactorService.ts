@@ -1,11 +1,12 @@
 import { authenticator } from 'otplib';
 import { initORM } from '../db';
+import * as QRCode from 'qrcode';
 
 class TwoFactorService {
   /**
    * Setup 2FA for a user (generate secret and QR code)
    */
-  async setup2FA(userId: number): Promise<{ url: string, secret: string }> {
+  async setup2FA(userId: number): Promise<{ qrcode: string, secret: string }> {
     const db = await initORM();
     const userInDb = await db.user.findOne({ id: userId });
     if (!userInDb) {
@@ -21,8 +22,9 @@ class TwoFactorService {
     await db.em.persistAndFlush(userInDb);
 
     const otpauth = authenticator.keyuri(userInDb.username, 'GhostDrive', secret);
+    const qrcode = await QRCode.toDataURL(otpauth);
 
-    return { url: otpauth, secret };
+    return { qrcode, secret };
   }
 
   /**
