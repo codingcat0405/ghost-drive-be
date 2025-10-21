@@ -1,8 +1,8 @@
-import { User } from './../entities/User';
+import { User } from '../entities/User';
 import { initORM } from "../db";
 import jwt from "jsonwebtoken";
 import MinioService from "./MinioService";
-import { File } from '../entities/File';
+import { authenticator } from 'otplib';
 
 class UserService {
   private readonly minioService: MinioService;
@@ -24,7 +24,8 @@ class UserService {
       username,
       password: hashPassword,
       role: "user",
-      bucketName
+      bucketName,
+      twoFactorEnabled: false
     })
     await db.em.persistAndFlush(user)
     //create root folder for user
@@ -53,7 +54,84 @@ class UserService {
     if (!isValid) {
       throw new Error("Invalid password")
     }
-    //generate token
+
+    // Check if 2FA is enabled
+    if (user.twoFactorEnabled) {
+      // Set timestamp for 2FA login attempt
+      user.twoFactorLoginAttemptAt = new Date();
+      await db.em.persistAndFlush(user);
+
+      return {
+        requiresTwoFactor: true,
+        message: "2FA verification required. Please provide your 2FA token."
+      }
+    }
+
+    //generate token for non-2FA users
+    const token = jwt.sign({ id: Number(user.id), role: user.role }, process.env.JWT_SECRET ?? "")
+
+    return {
+      requiresTwoFactor: false,
+      user: {
+        id: Number(user.id),
+        username: user.username,
+        role: user.role,
+        bucketName: user.bucketName,
+        aesKeyEncrypted: user.aesKeyEncrypted,
+        avatar: user.avatar,
+        fullName: user.fullName,
+        email: user.email,
+        storageQuota: user.storageQuota,
+        twoFactorEnabled: user.twoFactorEnabled
+      },
+      jwt: token
+    }
+  }
+
+  async verify2FA(username: string, twoFactorToken: string) {
+    const db = await initORM()
+    const user = await db.user.findOne({ username })
+    if (!user) {
+      throw new Error("User not found")
+    }
+
+    // Verify 2FA is enabled
+    if (!user.twoFactorEnabled) {
+      throw new Error("2FA is not enabled for this user")
+    }
+
+    if (!user.twoFactorSecret) {
+      throw new Error("2FA is enabled but no secret found")
+    }
+
+    // Check if login attempt timestamp exists
+    if (!user.twoFactorLoginAttemptAt) {
+      throw new Error("No recent login attempt found. Please login first.")
+    }
+
+    // Verify the timestamp is within 1 minute (60 seconds)
+    const now = new Date();
+    const attemptTime = new Date(user.twoFactorLoginAttemptAt);
+    const timeDifferenceInSeconds = (now.getTime() - attemptTime.getTime()) / 1000;
+
+    if (timeDifferenceInSeconds > 60) {
+      // Clear the expired timestamp
+      user.twoFactorLoginAttemptAt = undefined;
+      await db.em.persistAndFlush(user);
+      throw new Error("2FA verification timeout. Please login again.")
+    }
+
+    // Verify the 2FA token
+    const is2FAValid = authenticator.check(twoFactorToken, user.twoFactorSecret)
+    if (!is2FAValid) {
+      throw new Error("Invalid 2FA token")
+    }
+
+    // Clear the login attempt timestamp after successful verification
+    user.twoFactorLoginAttemptAt = undefined;
+    await db.em.persistAndFlush(user);
+
+    // Generate JWT token after successful 2FA verification
     const token = jwt.sign({ id: Number(user.id), role: user.role }, process.env.JWT_SECRET ?? "")
 
     return {
@@ -66,7 +144,8 @@ class UserService {
         avatar: user.avatar,
         fullName: user.fullName,
         email: user.email,
-        storageQuota: user.storageQuota
+        storageQuota: user.storageQuota,
+        twoFactorEnabled: user.twoFactorEnabled
       },
       jwt: token
     }
@@ -87,7 +166,8 @@ class UserService {
       aesKeyEncrypted: userInDb.aesKeyEncrypted,
       fullName: userInDb.fullName,
       email: userInDb.email,
-      storageQuota: userInDb.storageQuota
+      storageQuota: userInDb.storageQuota,
+      twoFactorEnabled: userInDb.twoFactorEnabled
     }
   }
 
@@ -139,8 +219,8 @@ class UserService {
       fullName: userInDb.fullName,
       email: userInDb.email,
       storageQuota: userInDb.storageQuota
-    }
-  }
+     }
+   }
 
   async updateUser(user: User, body: {
     avatar?: string,
@@ -168,6 +248,16 @@ class UserService {
     }
   }
 
+  async updateAvatar(user: User, avatar: string) {
+    const db = await initORM()
+    const userInDb = await db.user.findOne({ id: user.id })
+    if (!userInDb) {
+      throw new Error("User not found")
+    }
+    userInDb.avatar = avatar
+    await db.em.persistAndFlush(userInDb)
+    return userInDb
+  }
 
   async updatePassword(user: User, oldPassword: string, newPassword: string) {
     const db = await initORM()

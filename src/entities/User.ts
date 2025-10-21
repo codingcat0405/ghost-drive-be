@@ -48,4 +48,19 @@ export class User extends BaseEntity {
 
   @Property()
   role!: string;
+
+  @Property({
+    nullable: true,
+  })
+  twoFactorSecret?: string;
+
+  @Property({
+    default: false,
+  })
+  twoFactorEnabled!: boolean;
+
+  @Property({
+    nullable: true,
+  })
+  twoFactorLoginAttemptAt?: Date;
 }
