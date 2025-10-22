@@ -230,5 +230,59 @@ class MinioService {
       true
     );
   }
+
+  /**
+ * Create bucket with public read policy
+ * @param bucketName - the name of the bucket
+ */
+  async createPublicReadBucket(
+    bucketName: string,
+  ): Promise<string> {
+    const exists = await this.minioClient.bucketExists(bucketName);
+    if (exists) {
+      //set public read policy
+      throw new Error(`Bucket ${bucketName} already exists`);
+    }
+
+    await this.minioClient.makeBucket(bucketName, 'us-east-1');
+
+    // Default public read policy 
+    const bucketPolicy = {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Principal: { AWS: ["*"] },
+          Action: ["s3:GetObject"],
+          Resource: [`arn:aws:s3:::${bucketName}/*`]
+        }
+      ]
+    };
+
+    await this.minioClient.setBucketPolicy(
+      bucketName,
+      JSON.stringify(bucketPolicy)
+    );
+
+    return bucketName;
+  }
+
+  async createCommonBucket() {
+    if (!process.env.MINIO_COMMON_BUCKET) {
+      console.log('env MINIO_COMMON_BUCKET is not set');
+      return;
+    }
+    const exists = await this.minioClient.bucketExists(process.env.MINIO_COMMON_BUCKET);
+    if (exists) {
+      console.log(`Common Bucket: ${process.env.MINIO_COMMON_BUCKET} already exists`);
+      return;
+    }
+    try {
+      await this.createPublicReadBucket(process.env.MINIO_COMMON_BUCKET);
+      console.log(`Common Bucket: ${process.env.MINIO_COMMON_BUCKET} created`);
+    } catch (err) {
+      console.error(`Error creating common bucket: ${err}`);
+    }
+  }
 }
 export default MinioService;

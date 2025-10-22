@@ -1,23 +1,27 @@
-import {Elysia} from "elysia";
-import {initORM} from "./db";
-import {RequestContext} from "@mikro-orm/core";
+import { Elysia } from "elysia";
+import { initORM } from "./db";
+import { RequestContext } from "@mikro-orm/core";
 import responseMiddleware from "./middlewares/responseMiddleware";
 import errorMiddleware from "./middlewares/errorMiddleware";
 import userController from "./controllers/user.controller";
 import fileController from "./controllers/file.controller";
-import {swagger} from '@elysiajs/swagger'
-import {cors} from '@elysiajs/cors'
-import {opentelemetry} from '@elysiajs/opentelemetry'
+import { swagger } from '@elysiajs/swagger'
+import { cors } from '@elysiajs/cors'
+import { opentelemetry } from '@elysiajs/opentelemetry'
 import folderController from "./controllers/folder.controller";
 import uploadController from "./controllers/upload.controller";
-
+import MinioService from "./services/MinioService";
 
 const startApp = async () => {
   try {
     const dataSource = await initORM()
     //sync entities classes to database
     await dataSource.orm.getSchemaGenerator().updateSchema();
-    
+    console.log('Database synced');
+    //create common bucket for common uploads (avatars, etc.)
+    const minioService = new MinioService();
+    await minioService.createCommonBucket();
+
     const app = new Elysia()
       .use(cors())
       .get("/", () => "It's works!")
@@ -53,9 +57,9 @@ const startApp = async () => {
       .onError(errorMiddleware)
       .group("/api", group =>
         group.use(userController)
-        .use(fileController)
-        .use(folderController)
-        .use(uploadController)
+          .use(fileController)
+          .use(folderController)
+          .use(uploadController)
       )
       .listen(process.env.PORT || 3000);
 

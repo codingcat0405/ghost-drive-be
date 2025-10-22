@@ -17,6 +17,18 @@ class UserService {
     if (existUser) {
       throw new Error("User already exists")
     }
+    //validate username
+    if (username.length < 3 || username.length > 20) {
+      throw new Error("Username must be between 3 and 20 characters")
+    }
+    //validate password
+    if (password.length < 6) {
+      throw new Error("Password must be at least 6 characters")
+    }
+    //username cannot contain spaces 
+    if (username.includes(' ')) {
+      throw new Error("Username cannot contain spaces")
+    }
     const hashPassword = await Bun.password.hash(password, 'bcrypt')
     const bucketName = `ghostdrive-${username.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^-|-$/g, '')}`
     await this.minioService.createBucket(bucketName)
