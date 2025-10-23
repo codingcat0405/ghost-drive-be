@@ -340,75 +340,298 @@ The application will be available at:
 
 ## 🐳 Docker Deployment
 
-### Build and Run with Docker
+Ghost Drive can be deployed with Docker in under 5 minutes. Choose your deployment method:
+
+### Option 1: Full Stack with Docker Compose (Recommended)
+
+Deploy everything (database, storage, backend, frontend) with one command:
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd ghost-drive-be
+
+# Configure environment
+cp env.example .env
+nano .env  # Edit with your settings
+
+# Start all services
+npm run docker
+
+# Or manually:
+docker-compose -f docker/docker-compose.yml --env-file .env --profile all up -d
+
+# Check status
+docker-compose -f docker/docker-compose.yml ps
+
+# View logs
+docker-compose -f docker/docker-compose.yml logs -f
+
+# Stop all services
+npm run docker:down
+```
+
+**Access your instance:**
+- **Frontend**: http://localhost (port 80)
+- **Backend API**: http://localhost:3000
+- **Swagger Docs**: http://localhost:3000/swagger-ui
+- **MinIO Console**: http://localhost:9001
+
+### Option 2: Pre-built Docker Image
+
+Use the published Docker image with your own database and storage:
+
+```bash
+# Pull the latest image
+docker pull ghostdrive/ghost-drive-be:latest
+
+# Run with your configuration
+docker run -d \
+  --name ghost-drive-backend \
+  -p 3000:8080 \
+  -e POSTGRES_HOST=your-db-host \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=your-password \
+  -e POSTGRES_DB=ghost_drive \
+  -e MINIO_ENDPOINT=your-minio-host \
+  -e MINIO_ACCESS_KEY=your-access-key \
+  -e MINIO_SECRET_KEY=your-secret-key \
+  -e JWT_SECRET=your-jwt-secret \
+  ghostdrive/ghost-drive-be:latest
+```
+
+### Option 3: Build Locally
 
 ```bash
 # Build the image
-docker build -t ghost-drive .
+docker build -f docker/Dockerfile -t ghost-drive-be:local .
 
-# Run the container
-docker run -p 3000:3000 \
-  -e DATABASE_URL=postgresql://username:password@host:5432/ghost_drive \
-  -e JWT_SECRET=your-secret \
-  -e MINIO_ENDPOINT=minio-server \
-  ghost-drive
+# Run it
+docker run -d -p 3000:8080 \
+  --env-file .env \
+  ghost-drive-be:local
 ```
 
-### Docker Compose (Complete Stack)
+### Flexible Deployment Profiles
 
-Create a `docker-compose.yml` file:
-
-```yaml
-version: "3.8"
-
-services:
-  app:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/ghost_drive
-      - JWT_SECRET=your-super-secret-jwt-key
-      - MINIO_ENDPOINT=minio
-      - MINIO_PORT=9000
-      - MINIO_ACCESS_KEY=admin
-      - MINIO_SECRET_KEY=password123
-    depends_on:
-      - postgres
-      - minio
-
-  postgres:
-    image: postgres:15
-    environment:
-      - POSTGRES_DB=ghost_drive
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-  minio:
-    image: minio/minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=password123
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-
-volumes:
-  postgres_data:
-  minio_data:
-```
-
-Run with:
+Use Docker Compose profiles to run only what you need:
 
 ```bash
-docker-compose up -d
+# Everything (default)
+docker-compose -f docker/docker-compose.yml --env-file .env --profile all up -d
+
+# Backend only (external DB & storage)
+docker-compose -f docker/docker-compose.yml --env-file .env --profile backend up -d
+
+# Infrastructure only (DB + MinIO)
+docker-compose -f docker/docker-compose.yml --env-file .env --profile database --profile storage up -d
+
+# Backend + Frontend (external DB & storage)
+docker-compose -f docker/docker-compose.yml --env-file .env --profile backend --profile frontend up -d
+```
+
+### Required Environment Variables
+
+Create a `.env` file with these minimum requirements:
+
+```env
+# Service profiles
+COMPOSE_PROFILES=all
+
+# Database
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=changeme_secure_password
+POSTGRES_DB=ghost_drive
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+
+# MinIO Storage
+MINIO_ENDPOINT=minio
+MINIO_PORT=9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=changeme_secure_secret_key
+MINIO_BUCKET_NAME=ghost-drive
+MINIO_USE_SSL=false
+
+# Security (IMPORTANT: Change these!)
+JWT_SECRET=changeme_super_secret_jwt_key_minimum_32_characters
+
+# Application Ports
+BACKEND_PORT=3000
+FRONTEND_PORT=80
+MINIO_CONSOLE_PORT=9001
+```
+
+**Generate secure secrets:**
+```bash
+# JWT secret (64 characters)
+openssl rand -base64 64
+
+# Passwords (32 characters)
+openssl rand -base64 32
+```
+
+### Common Docker Operations
+
+```bash
+# Start services
+npm run docker
+
+# Stop services
+npm run docker:down
+
+# View logs
+docker-compose -f docker/docker-compose.yml logs -f backend
+
+# Restart a service
+docker-compose -f docker/docker-compose.yml restart backend
+
+# Rebuild after code changes
+docker-compose -f docker/docker-compose.yml build --no-cache backend
+docker-compose -f docker/docker-compose.yml up -d backend
+
+# Update to latest images
+docker-compose -f docker/docker-compose.yml pull
+docker-compose -f docker/docker-compose.yml up -d
+
+# Clean up
+docker-compose -f docker/docker-compose.yml down -v  # Warning: Deletes data!
+docker system prune -a  # Clean unused images
+```
+
+### Production Setup
+
+For production deployments:
+
+**1. Use strong secrets:**
+```bash
+# Generate and update in .env
+JWT_SECRET=$(openssl rand -base64 64)
+POSTGRES_PASSWORD=$(openssl rand -base64 32)
+MINIO_SECRET_KEY=$(openssl rand -base64 32)
+```
+
+**2. Use a reverse proxy with SSL:**
+```nginx
+# Example Nginx configuration
+server {
+    listen 443 ssl http2;
+    server_name yourdomain.com;
+    
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    
+    # Frontend
+    location / {
+        proxy_pass http://localhost:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    # Backend API
+    location /api {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+**3. Configure firewall:**
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw deny 3000/tcp  # Block direct backend access
+sudo ufw deny 9000/tcp  # Block direct MinIO access
+```
+
+**4. Set up automated backups:**
+```bash
+# Database backup
+docker-compose -f docker/docker-compose.yml exec postgres \
+  pg_dump -U postgres ghost_drive | gzip > backup-$(date +%Y%m%d).sql.gz
+
+# MinIO backup
+docker run --rm --volumes-from ghost-drive-minio \
+  -v $(pwd):/backup alpine \
+  tar czf /backup/minio-backup-$(date +%Y%m%d).tar.gz /data
+```
+
+### Publishing Docker Images (For Maintainers)
+
+Ghost Drive automatically builds and publishes to Docker Hub when you create a version tag:
+
+```bash
+# Create a release
+git tag v1.0.0
+git push origin v1.0.0
+
+# GitHub Actions automatically:
+# ✅ Builds multi-platform images (amd64, arm64)
+# ✅ Pushes to Docker Hub
+# ✅ Creates GitHub Release
+```
+
+**Available tags:**
+- `latest` - Latest stable release
+- `v1.2.3` - Specific version (recommended for production)
+- `v1.2` - Latest patch
+- `v1` - Latest minor
+- `v1.0.0-beta` - Pre-releases
+
+**Setup (one-time):**
+1. Add GitHub Secrets: `DOCKER_USERNAME` and `DOCKER_PASSWORD`
+2. Update image name in `.github/workflows/docker-publish.yml`
+
+### Troubleshooting
+
+**Services won't start:**
+```bash
+# Check logs
+docker-compose -f docker/docker-compose.yml logs backend
+
+# Check configuration
+docker-compose -f docker/docker-compose.yml config
+
+# Verify environment variables
+cat .env | grep -E 'POSTGRES|MINIO|JWT'
+
+# Restart services
+docker-compose -f docker/docker-compose.yml restart
+```
+
+**Backend health check fails:**
+```bash
+# Check if backend is running
+docker logs ghost-drive-backend
+
+# Test connection manually
+docker exec ghost-drive-backend curl http://localhost:8080
+
+# Verify port mappings
+docker ps | grep ghost-drive
+```
+
+**Database connection errors:**
+```bash
+# Test database connection
+docker-compose -f docker/docker-compose.yml exec postgres \
+  psql -U postgres -d ghost_drive -c "SELECT 1"
+
+# Check database logs
+docker-compose -f docker/docker-compose.yml logs postgres
+
+# Verify credentials
+docker-compose -f docker/docker-compose.yml exec backend env | grep POSTGRES
+```
+
+**Out of disk space:**
+```bash
+# Check disk usage
+docker system df
+
+# Clean up
+docker system prune -a --volumes  # Warning: Removes all unused data
 ```
 
 ## 📚 API Documentation
