@@ -7,7 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "bun run --watch src/index.ts",
     "dev:prod": "export NODE_ENV=production && bun run --watch src/index.ts",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "docker": "docker-compose -f docker/docker-compose.yml --env-file .env --profile all up -d",
+    "docker:down": "docker-compose -f docker/docker-compose.yml --env-file .env down"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.2.0",
