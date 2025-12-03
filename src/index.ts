@@ -11,6 +11,7 @@ import { opentelemetry } from '@elysiajs/opentelemetry'
 import folderController from "./controllers/folder.controller";
 import uploadController from "./controllers/upload.controller";
 import MinioService from "./services/MinioService";
+import vaultController from "./controllers/vault.controller";
 
 const startApp = async () => {
   try {
@@ -60,6 +61,7 @@ const startApp = async () => {
           .use(fileController)
           .use(folderController)
           .use(uploadController)
+          .use(vaultController)
       )
       .listen(process.env.PORT || 3000);
 

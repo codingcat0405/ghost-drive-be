@@ -3,6 +3,7 @@ import {User} from "./entities/User";
 import {File} from "./entities/File";
 import config from './mikro-orm.config'
 import { Folder } from "./entities/Folder";
+import Vault from "./entities/Vault";
 
 export interface Services {
   orm: MikroORM;
@@ -10,6 +11,7 @@ export interface Services {
   user: EntityRepository<User>;
   file: EntityRepository<File>;
   folder: EntityRepository<Folder>;
+  vault: EntityRepository<Vault>;
 }
 
 let dataSource: Services;
@@ -30,6 +32,7 @@ export async function initORM(options?: Options): Promise<Services> {
     user: orm.em.getRepository(User),
     file: orm.em.getRepository(File),
     folder: orm.em.getRepository(Folder),
+    vault: orm.em.getRepository(Vault),
   };
   return dataSource;
 }
