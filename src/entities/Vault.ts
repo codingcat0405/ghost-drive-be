@@ -11,7 +11,9 @@ class Vault extends BaseEntity {
   })
   username?: string;
 
-  @Property()
+  @Property({
+    type: 'text',
+  })
   password!: string;
 
   @Property()
