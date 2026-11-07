@@ -12,6 +12,6 @@ jobs:
         uses: actions/checkout@v3
       - run: |
           commit_hash=$(git rev-parse --short $GITHUB_SHA)
-          docker build -t localhost:32000/ghost-drive-be:$commit_hash .
-          docker push localhost:32000/ghost-drive-be:$commit_hash
-          kubectl set image deployment/ghost-drive-be ghost-drive-be=localhost:32000/ghost-drive-be:$commit_hash -n ghost-drive-be
+          docker build -t 192.168.45.100:8080/lilhuy/ghost-drive-be:$commit_hash .
+          docker push 192.168.45.100:8080/lilhuy/ghost-drive-be:$commit_hash
+          kubectl set image deployment/ghost-drive-be ghost-drive-be=192.168.45.100:8080/lilhuy/ghost-drive-be:$commit_hash -n ghost-drive-be
